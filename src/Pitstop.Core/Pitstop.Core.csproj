@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Regras do runner: config, CATALINA_BASE, processos, build, sync, app Java, servidor HTTP (Kestrel). -->
+  <PropertyGroup>
+    <RootNamespace>Pitstop</RootNamespace>
+    <AssemblyName>Pitstop.Core</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

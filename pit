@@ -1,0 +1,11 @@
+#!/bin/sh
+# Linha de comando do Pitstop (Linux): pit status | pit up <perfil> [--debug] [--build] | pit down <perfil> | pit build <perfil> | pit ui | pit ajustes
+# Resolve o link simbólico de ~/.local/bin/pit até a pasta do Pitstop.
+ALVO="$0"
+while [ -L "$ALVO" ]; do
+  LINK=$(readlink "$ALVO")
+  case "$LINK" in /*) ALVO="$LINK" ;; *) ALVO="$(dirname "$ALVO")/$LINK" ;; esac
+done
+PASTA=$(cd "$(dirname "$ALVO")" && pwd)
+[ -x "$PASTA/app/pit" ] || { echo "app/pit não encontrado em $PASTA. Rode o build (build.sh) ou o instalador." >&2; exit 1; }
+exec "$PASTA/app/pit" "$@"

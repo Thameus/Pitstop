@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- pit.exe: linha de comando (pit up/down/build/sync/status/projetos) e "pit ui" (tela com console). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pitstop.Cli</RootNamespace>
+    <AssemblyName>pit</AssemblyName>
+    <ApplicationIcon>..\..\web\icone.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Pitstop.Core\Pitstop.Core.csproj" />
+  </ItemGroup>
+</Project>

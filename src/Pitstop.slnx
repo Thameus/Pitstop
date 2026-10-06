@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Pitstop.Core/Pitstop.Core.csproj" />
+  <Project Path="Pitstop.Cli/Pitstop.Cli.csproj" />
+  <Project Path="Pitstop.App/Pitstop.App.csproj" />
+  <Project Path="Pitstop.Setup.Windows/Pitstop.Setup.Windows.csproj" />
+</Solution>

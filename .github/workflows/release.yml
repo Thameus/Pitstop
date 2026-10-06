@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build release archives
+    runs-on: windows-2025
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Check tag and xz support
+        shell: pwsh
+        run: |
+          $v = ([xml](Get-Content src/Directory.Build.props)).Project.PropertyGroup.Version
+          if ("v$v" -ne "${{ github.ref_name }}") {
+            throw "tag ${{ github.ref_name }} differs from Directory.Build.props version v$v"
+          }
+          $t = & "$env:SystemRoot\System32\tar.exe" --version
+          Write-Host $t
+          if ($t -notmatch 'liblzma') { throw 'tar.exe on this runner has no xz/liblzma support' }
+
+      - name: Package Windows and Linux
+        shell: powershell
+        run: .\empacotar.ps1
+
+      - name: Smoke release archives
+        shell: pwsh
+        run: ./tests/smoke-package.ps1
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: pitstop-release
+          path: |
+            dist/*.exe
+            dist/*.run
+            dist/*.tar.xz
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke-linux:
+    name: Run packaged Linux binary
+    needs: package
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: pitstop-release
+          path: dist
+
+      - name: Smoke Linux self-contained package
+        run: sh ./tests/smoke-package-linux.sh dist
+
+  publish:
+    name: Publish GitHub Release
+    needs: [package, smoke-linux]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: pitstop-release
+          path: dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes=$(cat <<'EOF'
+          Instaladores do Pitstop para Windows e Linux x64.
+
+          - Windows: baixe pitstop-*-setup-win-x64.exe e siga o assistente.
+          - Linux: baixe pitstop-*-linux-x64.run e execute com sh <arquivo>.run.
+          - Os .tar.xz continuam disponiveis como pacotes portateis.
+          - Integridade: confira SHA256SUMS.txt.
+          - O instalador pode preparar JDK, Tomcat, Maven e Node.js de forma opcional.
+          - Windows: esta versao ainda nao possui assinatura Authenticode; o SmartScreen pode exibir um aviso.
+          EOF
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.exe dist/*.run dist/*.tar.xz dist/SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --title "Pitstop $TAG" --notes "$notes"
+          else
+            gh release create "$TAG" dist/*.exe dist/*.run dist/*.tar.xz dist/SHA256SUMS.txt --title "Pitstop $TAG" --notes "$notes"
+          fi

@@ -1,0 +1,40 @@
+MANIFESTO - FONTES OFFLINE (TELA WEB E JANELA)
+==========================================
+Data: 2026-09-29
+Licença: SIL OPEN FONT LICENSE (OFL 1.1)
+
+1. SpaceGrotesk.woff2
+   Bytes: 22528
+   URL origem: https://fonts.gstatic.com/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2
+   Familia: Space Grotesk (400-700)
+   Bloco: latin
+   Unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD
+   Licença: web/fonts/OFL-SpaceGrotesk.txt
+
+2. JetBrainsMono.woff2
+   Bytes: 40960
+   URL origem: https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbV2o-flEEny0FZhsfKu5WU4xD7OwE.woff2
+   Familia: JetBrains Mono (100-800)
+   Bloco: latin
+   Unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD
+   Licença: web/fonts/OFL-JetBrainsMono.txt
+
+VERIFICACAO
+===========
+✓ SpaceGrotesk.woff2 - Magic bytes "wOF2", 22528 bytes
+✓ JetBrainsMono.woff2 - Magic bytes "wOF2", 40960 bytes
+✓ OFL-SpaceGrotesk.txt - Contém "SIL OPEN FONT LICENSE"
+✓ OFL-JetBrainsMono.txt - Contém "SIL OPEN FONT LICENSE"
+
+LOCALIZACAO
+===========
+Pasta: web/fonts/
+Arquivos: 4 (2 .woff2 + 2 .txt)
+
+JANELA (src/Pitstop.App/Fontes, TTF embutido no executável)
+===========================================================
+Mesmas famílias, em TTF estático (o Avalonia não lê woff2), subconjunto latino, de
+https://cdn.jsdelivr.net/fontsource/fonts/<familia>@latest/latin-<peso>-normal.ttf (Fontsource, OFL 1.1):
+  SpaceGrotesk-Regular.ttf (400), SpaceGrotesk-Medium.ttf (500), SpaceGrotesk-SemiBold.ttf (600)
+  JetBrainsMono-Regular.ttf (400), JetBrainsMono-Medium.ttf (500)
+Licenças: OFL-SpaceGrotesk.txt e OFL-JetBrainsMono.txt (também copiadas em src/Pitstop.App/Fontes).

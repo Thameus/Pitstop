@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pitstop (Pitstop.exe no Windows, Pitstop no Linux): janela + ícone na bandeja + servidor da tela web no MESMO
+       processo. Avalonia: a mesma janela nos dois sistemas. Visual: design visual do Pitstop. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Pitstop.App</RootNamespace>
+    <AssemblyName>Pitstop</AssemblyName>
+    <ApplicationIcon>..\..\web\icone.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Fontes\*.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Pitstop.Core\Pitstop.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,336 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Pitstop.App.App"
+             RequestedThemeVariant="Default"
+             Name="Pitstop">
+  <!-- Tokens de design visual do Pitstop (os mesmos da web/ui.html, sem os dois hifens e em PascalCase). O tema segue o sistema; o botão
+       da lateral fixa claro/escuro (cache/tela.json). -->
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="Bg" Color="#F7F6FA"/>
+          <SolidColorBrush x:Key="Lado" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="Surf" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="Surf2" Color="#FBFAFD"/>
+          <SolidColorBrush x:Key="Line" Color="#E3DFEA"/>
+          <SolidColorBrush x:Key="Fg" Color="#1A1622"/>
+          <SolidColorBrush x:Key="Mut" Color="#5F596B"/>
+          <SolidColorBrush x:Key="Off" Color="#A7A1B2"/>
+          <SolidColorBrush x:Key="Acc" Color="#7338B3"/>
+          <SolidColorBrush x:Key="AccHover" Color="#5F2C96"/>
+          <SolidColorBrush x:Key="AccTxt" Color="#7338B3"/>
+          <SolidColorBrush x:Key="AccFg" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="Soft" Color="#147338B3"/>
+          <SolidColorBrush x:Key="Anel" Color="#2E7338B3"/>
+          <SolidColorBrush x:Key="Ok" Color="#1E8452"/>
+          <SolidColorBrush x:Key="Dbg" Color="#2F63C9"/>
+          <SolidColorBrush x:Key="Warn" Color="#9A6206"/>
+          <SolidColorBrush x:Key="Err" Color="#C4302B"/>
+          <SolidColorBrush x:Key="LogBg" Color="#FCFBFE"/>
+          <SolidColorBrush x:Key="LogFg" Color="#2B2533"/>
+          <SolidColorBrush x:Key="Veu" Color="#521A1622"/>
+          <BoxShadows x:Key="Sombra">0 8 32 0 #261A1622</BoxShadows>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="Bg" Color="#0E0D12"/>
+          <SolidColorBrush x:Key="Lado" Color="#131118"/>
+          <SolidColorBrush x:Key="Surf" Color="#18161E"/>
+          <SolidColorBrush x:Key="Surf2" Color="#1D1A24"/>
+          <SolidColorBrush x:Key="Line" Color="#2B2735"/>
+          <SolidColorBrush x:Key="Fg" Color="#EDEAF3"/>
+          <SolidColorBrush x:Key="Mut" Color="#A09AAD"/>
+          <SolidColorBrush x:Key="Off" Color="#6B6577"/>
+          <SolidColorBrush x:Key="Acc" Color="#7338B3"/>
+          <SolidColorBrush x:Key="AccHover" Color="#8547C8"/>
+          <SolidColorBrush x:Key="AccTxt" Color="#B48AE6"/>
+          <SolidColorBrush x:Key="AccFg" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="Soft" Color="#387338B3"/>
+          <SolidColorBrush x:Key="Anel" Color="#667338B3"/>
+          <SolidColorBrush x:Key="Ok" Color="#43C07F"/>
+          <SolidColorBrush x:Key="Dbg" Color="#6EA8FE"/>
+          <SolidColorBrush x:Key="Warn" Color="#E3A63F"/>
+          <SolidColorBrush x:Key="Err" Color="#F0625E"/>
+          <SolidColorBrush x:Key="LogBg" Color="#0B0A0F"/>
+          <SolidColorBrush x:Key="LogFg" Color="#CFCAD9"/>
+          <SolidColorBrush x:Key="Veu" Color="#99000000"/>
+          <BoxShadows x:Key="Sombra">0 10 36 0 #80000000</BoxShadows>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <FontFamily x:Key="FonteSans">avares://Pitstop/Fontes#Space Grotesk</FontFamily>
+      <FontFamily x:Key="FonteMono">avares://Pitstop/Fontes#JetBrains Mono</FontFamily>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Light" Accent="#7338B3" RegionColor="#F7F6FA" ErrorText="#C4302B"/>
+        <ColorPaletteResources x:Key="Dark" Accent="#7338B3" RegionColor="#0E0D12" ErrorText="#F0625E"/>
+      </FluentTheme.Palettes>
+    </FluentTheme>
+
+    <Style Selector="Window">
+      <Setter Property="FontFamily" Value="{StaticResource FonteSans}"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Background" Value="{DynamicResource Bg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+
+    <!-- ============================================================ botões -->
+    <Style Selector="Button.b">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="MinHeight" Value="40"/>
+      <Setter Property="Padding" Value="14,0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.b:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+    <Style Selector="Button.b:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Anel}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+    <Style Selector="Button.b:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+    <Style Selector="Button.b:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+
+    <Style Selector="Button.pri">
+      <Setter Property="Background" Value="{DynamicResource Acc}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccFg}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.pri:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccHover}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource AccHover}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccFg}"/>
+    </Style>
+    <Style Selector="Button.pri:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccHover}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccFg}"/>
+    </Style>
+    <Style Selector="Button.pri:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Acc}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccFg}"/>
+    </Style>
+
+    <Style Selector="Button.perigo">
+      <Setter Property="Background" Value="{DynamicResource Err}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Err}"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+    <Style Selector="Button.perigo:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Err}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Fg}"/>
+      <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <Style Selector="Button.fantasma">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.fantasma:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <Style Selector="Button.ico">
+      <Setter Property="Width" Value="40"/>
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccTxt}"/>
+      <Setter Property="Padding" Value="8,0"/>
+      <Setter Property="MinHeight" Value="32"/>
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccTxt}"/>
+    </Style>
+
+    <!-- item da lateral -->
+    <Style Selector="Button.perfil">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="12,10"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.perfil:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+    </Style>
+    <Style Selector="Button.perfil.sel /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+    </Style>
+    <Style Selector="Button.perfil.sel">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+    </Style>
+
+    <!-- aba -->
+    <Style Selector="Button.aba">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource Mut}"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0,0,0,2"/>
+      <Setter Property="CornerRadius" Value="0"/>
+      <Setter Property="Padding" Value="4,12"/>
+      <Setter Property="Margin" Value="0,0,24,-1"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.aba:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    </Style>
+    <Style Selector="Button.aba.sel">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.aba.sel:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+    </Style>
+
+    <!-- ============================================================ campos -->
+    <Style Selector="TextBox.inp">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="MinHeight" Value="42"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="FontFamily" Value="{StaticResource FonteMono}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource Anel}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Fg}"/>
+    </Style>
+    <Style Selector="TextBox.inp /template/ TextBlock#PART_Watermark, TextBox.inp /template/ TextBlock#PART_FloatingWatermark">
+      <Setter Property="Foreground" Value="{DynamicResource Off}"/>
+      <Setter Property="FontFamily" Value="{StaticResource FonteSans}"/>
+    </Style>
+    <Style Selector="TextBox.inp:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Off}"/>
+    </Style>
+    <Style Selector="TextBox.inp:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+    <Style Selector="TextBox.inp:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Acc}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="TextBox.inp:focus">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+    <Style Selector="TextBox.inp.invalido /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource Err}"/>
+    </Style>
+    <Style Selector="TextBox.busca">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FontFamily" Value="{StaticResource FonteSans}"/>
+      <Setter Property="FontSize" Value="14"/>
+    </Style>
+    <Style Selector="TextBox.busca:focus /template/ Border#PART_BorderElement, TextBox.busca:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <Style Selector="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <!-- ============================================================ menus -->
+    <Style Selector="MenuFlyoutPresenter">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="6"/>
+      <Setter Property="FontFamily" Value="{StaticResource FonteSans}"/>
+    </Style>
+    <Style Selector="MenuItem">
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="12,8"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    </Style>
+    <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+    </Style>
+    <Style Selector="MenuItem.perigo">
+      <Setter Property="Foreground" Value="{DynamicResource Err}"/>
+    </Style>
+    <Style Selector="ToolTip">
+      <Setter Property="Background" Value="{DynamicResource Surf}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="FontFamily" Value="{StaticResource FonteSans}"/>
+      <Setter Property="FontSize" Value="12"/>
+    </Style>
+
+    <!-- ============================================================ log -->
+    <Style Selector="ListBox.log">
+      <Setter Property="Background" Value="{DynamicResource LogBg}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="12,8"/>
+      <Setter Property="SelectionMode" Value="Multiple"/>
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+    </Style>
+    <Style Selector="ListBox.log ListBoxItem">
+      <Setter Property="Padding" Value="6,1"/>
+      <Setter Property="MinHeight" Value="0"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+    <Style Selector="ListBox.log ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ListBox.log ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Soft}"/>
+    </Style>
+    <Style Selector="TextBlock.linha">
+      <Setter Property="FontFamily" Value="{StaticResource FonteMono}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="LineHeight" Value="19"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Foreground" Value="{DynamicResource LogFg}"/>
+    </Style>
+    <Style Selector="TextBlock.linha.t"><Setter Property="Foreground" Value="{DynamicResource AccTxt}"/></Style>
+    <Style Selector="TextBlock.linha.e"><Setter Property="Foreground" Value="{DynamicResource Err}"/></Style>
+    <Style Selector="TextBlock.linha.w"><Setter Property="Foreground" Value="{DynamicResource Warn}"/></Style>
+    <Style Selector="TextBlock.linha.o"><Setter Property="Foreground" Value="{DynamicResource Ok}"/></Style>
+  </Application.Styles>
+</Application>

@@ -1,0 +1,41 @@
+.gitattributes text eol=lf
+* text=auto
+
+# Código, configuração e documentação: LF no repositório e em qualquer sistema.
+*.cs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.slnx text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.html text eol=lf
+*.xml text eol=lf
+.env.exemplo text eol=lf
+LICENSE text eol=lf
+NOTICE text eol=lf
+
+# Notices/licenças upstream: preservar conteúdo legal, inclusive whitespace original.
+third-party/** text eol=lf -whitespace
+src/Pitstop.App/Fontes/OFL-*.txt text eol=lf -whitespace
+web/fonts/OFL-*.txt text eol=lf -whitespace
+
+# Scripts Unix precisam chegar ao GitHub/Release com LF.
+*.sh text eol=lf
+pit text eol=lf
+
+# Scripts Windows.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binários.
+*.ico binary
+*.png binary
+*.ttf binary
+*.woff2 binary
+*.lnk binary
+*.xz binary
+*.dll binary
+*.exe binary

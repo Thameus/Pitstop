@@ -1,0 +1,12 @@
+{
+  "dotnet": "10.0.12",
+  "aspnetcore": "10.0.12",
+  "windowsDesktop": "10.0.12",
+  "avalonia": "11.3.22",
+  "avaloniaAngleWindowsNatives": "2.1.25547.20250602",
+  "skiasharp": "2.88.9",
+  "harfbuzzsharp": "8.3.1.1",
+  "harfbuzz": "8.3.1",
+  "microcomRuntime": "0.11.0",
+  "tmdsDbusProtocol": "0.21.3"
+}
