@@ -66,6 +66,9 @@ public sealed class Servidor(Runner runner, int porta)
     {
         var req = ctx.Request;
         var res = ctx.Response;
+        res.Headers["X-Content-Type-Options"] = "nosniff";
+        res.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
+        res.Headers["Referrer-Policy"] = "no-referrer";
         var host = req.Headers.Host.ToString();
         if (host != "localhost:" + porta && host != "127.0.0.1:" + porta) { res.StatusCode = 403; return; }
         var url = req.Path.Value ?? "/";

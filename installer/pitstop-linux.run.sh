@@ -99,7 +99,22 @@ if [ -n "$JDK_HOME" ] && [ -x "$JDK_HOME/bin/java" ]; then
 fi
 if [ -z "$JDK_HOME" ] && ask "  Baixar Eclipse Temurin JDK 21 portátil?" n; then
   jdk="$TMP/jdk.tar.gz"
-  download 'https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse?project=jdk' "$jdk"
+  jdk_api='https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse?project=jdk'
+  if command -v curl >/dev/null 2>&1; then
+    jdk_url=$(curl -fsS --retry 3 -o /dev/null -w '%{redirect_url}' "$jdk_api")
+  elif command -v wget >/dev/null 2>&1; then
+    jdk_url=$(wget -qS --spider "$jdk_api" 2>&1 | awk '/^  Location:/ { print $2; exit }' | tr -d '\r')
+  else
+    echo "curl ou wget é necessário para baixar ferramentas opcionais." >&2
+    exit 1
+  fi
+  [ -n "$jdk_url" ] || { echo 'não foi possível descobrir a URL do Eclipse Temurin.' >&2; exit 1; }
+  download "$jdk_url" "$jdk"
+  command -v sha256sum >/dev/null 2>&1 || { echo 'sha256sum é necessário para verificar o Eclipse Temurin.' >&2; exit 1; }
+  expected=$(download_text "$jdk_url.sha256.txt" | grep -Eo '[0-9a-fA-F]{64}' | head -n 1)
+  [ -n "$expected" ] || { echo 'checksum do Eclipse Temurin não encontrado.' >&2; exit 1; }
+  actual=$(sha256sum "$jdk" | awk '{print $1}')
+  [ "$expected" = "$actual" ] || { echo 'checksum do Eclipse Temurin não confere.' >&2; exit 1; }
   JDK_HOME="$TOOLS/jdk-21"
   extract_one "$jdk" "$JDK_HOME" gz
 fi

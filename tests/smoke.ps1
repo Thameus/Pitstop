@@ -62,6 +62,9 @@ try {
 
     $rootResponse = $http.GetAsync("$base/").GetAwaiter().GetResult()
     if ([int]$rootResponse.StatusCode -ne 200) { throw "GET / returned $([int]$rootResponse.StatusCode)" }
+    if ($rootResponse.Headers.GetValues('X-Content-Type-Options') -notcontains 'nosniff') { throw 'GET / missing X-Content-Type-Options: nosniff' }
+    if (($rootResponse.Headers.GetValues('Content-Security-Policy') -join ';') -notmatch "frame-ancestors 'none'") { throw "GET / missing CSP frame-ancestors 'none'" }
+    if ($rootResponse.Headers.GetValues('Referrer-Policy') -notcontains 'no-referrer') { throw 'GET / missing Referrer-Policy: no-referrer' }
 
     $badHost = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$base/api/status")
     $badHost.Headers.Host = 'example.invalid'
