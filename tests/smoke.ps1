@@ -76,6 +76,14 @@ try {
     $putResponse = $http.SendAsync($put).GetAwaiter().GetResult()
     if ([int]$putResponse.StatusCode -ne 403) { throw "PUT without X-PIT returned $([int]$putResponse.StatusCode), expected 403" }
 
+    $scriptsNoHeader = $http.GetAsync("$base/api/scripts?perfil=inexistente").GetAwaiter().GetResult()
+    if ([int]$scriptsNoHeader.StatusCode -ne 403) { throw "GET /api/scripts without X-PIT returned $([int]$scriptsNoHeader.StatusCode), expected 403" }
+
+    $scriptsInvalid = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$base/api/scripts?perfil=..")
+    $scriptsInvalid.Headers.Add('X-PIT', '1')
+    $scriptsInvalidResponse = $http.SendAsync($scriptsInvalid).GetAwaiter().GetResult()
+    if ([int]$scriptsInvalidResponse.StatusCode -ne 400) { throw "GET /api/scripts with unsafe profile returned $([int]$scriptsInvalidResponse.StatusCode), expected 400" }
+
     $unsafe = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Put, "$base/api/cfg")
     $unsafe.Headers.Add('X-PIT', '1')
     $unsafe.Content = [Net.Http.StringContent]::new('{"perfis":{"..":{}}}', [Text.Encoding]::UTF8, 'application/json')

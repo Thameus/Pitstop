@@ -53,7 +53,8 @@ public static class Pacote
         var tmp = destino + ".tmp";
         if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
         Directory.CreateDirectory(tmp);
-        var raiz = Path.GetFullPath(tmp) + Path.DirectorySeparatorChar;
+        var raiz = Path.GetFullPath(tmp + Path.DirectorySeparatorChar);
+        var comparacaoCaminho = So.Windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var t0 = Agora.Ms;
         var aviso = t0 + 10000;
         log("[pit] extraindo " + arquivo + " (" + (new FileInfo(arquivo).Length / 1048576) + " MB) -> " + destino);
@@ -68,7 +69,7 @@ public static class Pacote
                     if (cancelado()) throw new ErroRunner("extração cancelada") { Cancelado = true };
                     n++;
                     var alvo = Path.GetFullPath(Path.Combine(tmp, e.FullName));
-                    if (!alvo.StartsWith(raiz, StringComparison.OrdinalIgnoreCase) && alvo + Path.DirectorySeparatorChar != raiz)
+                    if (!alvo.StartsWith(raiz, comparacaoCaminho))
                         throw new ErroRunner("pacote com caminho fora da pasta de extração: " + e.FullName);
                     if (e.FullName.EndsWith('/') || e.FullName.EndsWith('\\')) { Directory.CreateDirectory(alvo); continue; }
                     Directory.CreateDirectory(Path.GetDirectoryName(alvo)!);

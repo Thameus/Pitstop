@@ -114,8 +114,18 @@ public sealed class Servidor(Runner runner, int porta)
                 await Responder(res, 200, JavaApp.ClassesMain(mod));
                 return;
             }
-            // seletor de script do perfil npm: scripts do package.json (?pasta=<pasta com package.json>)
-            if (get && url == "/api/scripts") { await Responder(res, 200, NodeApp.Scripts(req.Query["pasta"].ToString())); return; }
+            // seletor de script npm: recebe só o nome de um perfil já salvo; o caminho vem do perfis.json local.
+            // X-PIT impede que uma página de outra origem use o navegador para sondar arquivos locais.
+            if (get && url == "/api/scripts")
+            {
+                if (req.Headers["X-PIT"].ToString() != "1") { res.StatusCode = 403; return; }
+                var nome = req.Query["perfil"].ToString();
+                if (!Config.NomeValido(nome)) throw new ErroRunner("perfil inválido");
+                var perfil = Config.LerPerfil(Config.Ler(), nome);
+                if (!perfil.EhNpm) throw new ErroRunner("perfil não é npm: " + nome);
+                await Responder(res, 200, new { pasta = perfil.Pasta, scripts = NodeApp.Scripts(perfil.Pasta) });
+                return;
+            }
             // seletor de versão dos perfis war/zip: o mesmo arquivo nas pastas irmãs (?arq=<caminho>&ext=<.war|.zip,.jar se vazio>)
             if (get && url == "/api/versoes")
             {
