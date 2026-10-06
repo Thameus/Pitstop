@@ -871,6 +871,7 @@ async function salvar() {
   (p.artefatos || []).forEach(a => artsPerfil[chave(a.repo, a.modulo)] = a);
   sujo = false; pintarSujo();
   pintarPerfis(); pintarCabecalho();
+  if (p.tipo === 'npm') { scriptsDe = null; carregarScripts(); }
 }
 
 // edição pendente: "Salvar" aparece no cabeçalho; trocar de perfil salva antes
@@ -1166,13 +1167,20 @@ function pintarExtracaoWars(arts) {
 let scriptsDe = null, scripts = [];
 async function carregarScripts() {
   const pasta = $('#n_pasta').value.trim();
-  if (pasta === scriptsDe) return;
-  scriptsDe = pasta; scripts = [];
+  const chaveScripts = atual + '|' + pasta;
+  if (chaveScripts === scriptsDe) return;
+  scriptsDe = chaveScripts; scripts = [];
   $('#n_scripts').innerHTML = ''; $('#n_scriptsInfo').textContent = '';
-  if (!pasta) { pintarLinha(); return; }
+  if (!pasta || !atual) { pintarLinha(); return; }
   try {
-    const l = await api('GET', '/api/scripts?pasta=' + encodeURIComponent(pasta));
-    if (pasta !== scriptsDe) return;   // pasta trocou enquanto carregava
+    const r = await api('GET', '/api/scripts?perfil=' + encodeURIComponent(atual));
+    if (chaveScripts !== scriptsDe) return;   // perfil/pasta trocou enquanto carregava
+    if ((r.pasta || '').toLowerCase() !== pasta.toLowerCase()) {
+      $('#n_scriptsInfo').textContent = '— salve o perfil para listar scripts desta pasta';
+      pintarLinha();
+      return;
+    }
+    const l = r.scripts || [];
     scripts = l;
     $('#n_scripts').innerHTML = l.map(x => `<option value="${esc(x.nome)}">${esc(x.comando)}</option>`).join('');
     $('#n_scriptsInfo').textContent = '— ' + l.length + ' no package.json';
