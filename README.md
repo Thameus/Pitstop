@@ -39,14 +39,34 @@ Arquivos recomendados em cada GitHub Release:
 
 | Sistema | Instalador recomendado | Portátil |
 |---|---|---|
-| Windows 10/11 x64 | `pitstop-<versão>-setup-win-x64.exe` | `pitstop-<versão>-win-x64.tar.xz` |
+| Windows 10/11 x64 | `pitstop-<versão>-setup-win-x64.exe` | `pitstop-<versão>-win-x64.zip` |
 | Linux x64 | `pitstop-<versão>-linux-x64.run` | `pitstop-<versão>-linux-x64.tar.xz` |
 
 O runtime .NET necessário ao Pitstop já vai embutido nos pacotes de distribuição.
 
+Nos pacotes Windows self-contained, a distribuição do .NET usa licenciamento misto: arquivos normalmente cobertos por MIT convivem com binários específicos cobertos pela Microsoft .NET Library License. O pacote inclui o mapeamento oficial e os termos aplicáveis em `third-party/dotnet/`; detalhes em [LICENCAS.md](LICENCAS.md).
+
 JDK, Maven, Tomcat e Node.js são opcionais e só são necessários quando o tipo de perfil usa essas ferramentas. O instalador pode preparar cópias portáteis ou você pode apontar instalações já existentes.
 
 Reinstalar por cima mantém os dados do usuário: `.env`, `config/`, `cache/`, `logs/` e `bases/`.
+
+## Atualizações pelo aplicativo
+
+Em **Ajustes → Atualizações**, o Pitstop pode consultar manualmente a última versão estável publicada no GitHub Releases. Não existe verificação periódica nem serviço de atualização em segundo plano.
+
+Quando existe uma versão nova, o fluxo é:
+
+1. baixar o instalador oficial adequado ao sistema;
+2. validar o SHA-256 publicado pelo GitHub;
+3. criar um backup pequeno de `.env` e dos arquivos de `config/`;
+4. pedir confirmação se houver perfis em execução;
+5. fechar o Pitstop de forma graciosa;
+6. substituir somente os arquivos do programa;
+7. reabrir a versão nova.
+
+No Windows, o próprio `Pitstop-Setup.exe` possui um modo interno `--update`. A troca de `app/`, `web/` e `third-party/` é feita por diretórios temporários com restauração da versão anterior se a substituição falhar. No Linux, o pacote `.run` oficial é executado depois que o processo atual termina.
+
+Os backups mínimos ficam em `cache/update-backups/`; somente os três mais recentes são mantidos.
 
 Guia curto para usuário final: [LEIAME.md](LEIAME.md).
 

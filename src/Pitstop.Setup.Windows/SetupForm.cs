@@ -316,6 +316,10 @@ sealed class SetupForm : Form
         lines.Add("• Node.js: " + ToolSummary(node, downloadNode.Checked, "baixar LTS"));
         lines.Add("• Projetos: " + EmptyOr(projects.Text, "configurar depois"));
         lines.Add("");
+        lines.Add("Licenças: Pitstop Apache-2.0; componentes de terceiros mantêm seus próprios termos.");
+        lines.Add("No Windows, partes do .NET self-contained usam a Microsoft .NET Library License.");
+        lines.Add("Ao clicar em Instalar, você concorda com os termos aplicáveis aos componentes redistribuídos.");
+        lines.Add("");
         lines.Add("Se uma ferramenta ficar vazia, nada impede a instalação: o caminho poderá ser definido depois em Ajustes ou no próprio perfil.");
         return string.Join(Environment.NewLine, lines);
     }

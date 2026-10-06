@@ -260,7 +260,90 @@ sealed class Assistente : Window
             autostart,
             Ui.Grade(2, CampoAjuste("RUNNER_PORTA"), CampoAjuste("STOP_TIMEOUT_SEG")),
             Ui.Paragrafo("Porta e tempo de stop valem a partir da próxima abertura do Pitstop. Arquivo: " + Env.Arquivo, 12, "Off")));
+        sp.Children.Add(BlocoAtualizacao());
         return sp;
+    }
+
+    Control BlocoAtualizacao()
+    {
+        ReleasePitstop? release = null;
+        var status = Ui.Paragrafo("A verificação só acontece quando você pedir.", 12, "Mut");
+        var buscar = Ui.Btn("Buscar atualização", "fantasma");
+        var atualizar = Ui.Btn("Atualizar e reiniciar", "pri");
+        atualizar.IsVisible = false;
+
+        buscar.Click += async (_, _) =>
+        {
+            buscar.IsEnabled = false;
+            atualizar.IsVisible = false;
+            status.Text = "Consultando a versão mais recente...";
+            try
+            {
+                release = await Atualizador.ConsultarAsync();
+                if (!release.Nova)
+                {
+                    status.Text = "Você já está na versão mais recente.";
+                    return;
+                }
+
+                var tamanho = Atualizador.Tamanho(release.Tamanho);
+                status.Text = "Pitstop " + release.VersaoTexto + " disponível" +
+                              (tamanho == "" ? "." : " · " + tamanho + ".");
+                atualizar.IsVisible = true;
+                atualizar.IsEnabled = true;
+            }
+            catch (Exception ex)
+            {
+                status.Text = "Não foi possível verificar atualizações: " + ex.Message;
+            }
+            finally
+            {
+                buscar.IsEnabled = true;
+                buscar.Content = "Buscar novamente";
+            }
+        };
+
+        atualizar.Click += async (_, _) =>
+        {
+            if (release == null) return;
+            buscar.IsEnabled = false;
+            atualizar.IsEnabled = false;
+            status.Text = "Baixando Pitstop " + release.VersaoTexto + "...";
+            try
+            {
+                var progresso = new Progress<(long Recebidos, long Total)>(p =>
+                {
+                    if (p.Total <= 0) return;
+                    var pct = Math.Clamp((int)Math.Round(p.Recebidos * 100d / p.Total), 0, 100);
+                    status.Text = "Baixando Pitstop " + release.VersaoTexto + "... " + pct + "%";
+                });
+                var pacote = await Atualizador.BaixarAsync(release, progresso);
+                status.Text = "Download validado. Preparando atualização...";
+                var iniciou = await bandeja.SairParaAtualizar(() =>
+                {
+                    Atualizador.CriarBackupMinimo();
+                    Atualizador.IniciarInstalador(release, pacote);
+                });
+                if (!iniciou)
+                {
+                    status.Text = "Atualização cancelada.";
+                    buscar.IsEnabled = true;
+                    atualizar.IsEnabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                status.Text = "A atualização não foi iniciada: " + ex.Message;
+                buscar.IsEnabled = true;
+                atualizar.IsEnabled = true;
+            }
+        };
+
+        var botoes = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { buscar, atualizar } };
+        return Ui.Bloco("Atualizações", "consulta manual ao GitHub Releases; nada roda em segundo plano", null,
+            Ui.Txt("Versão instalada: " + Atualizador.VersaoAtual, 13, "Fg", FontWeight.SemiBold),
+            status,
+            botoes);
     }
 
     // ---------------------------------------------------------------- validação e gravação

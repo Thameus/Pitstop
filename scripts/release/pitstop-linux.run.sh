@@ -77,6 +77,15 @@ if [ "${1:-}" = "--smoke" ]; then
   exit $?
 fi
 
+if [ "${1:-}" = "--update" ]; then
+  [ -n "${2:-}" ] || { echo "uso: $SELF --update <destino>" >&2; exit 2; }
+  DEST="$2"
+  echo "  Atualizando o Pitstop em $DEST ..."
+  sh "$PKG/instalar.sh" "$DEST" --sim --nao-abrir
+  echo "  Pitstop $VERSION atualizado."
+  exit 0
+fi
+
 printf '\n  Pitstop %s - instalação Linux\n\n' "$VERSION"
 printf '  Pasta de instalação [%s]: ' "$DEST"
 read -r answer || answer=''

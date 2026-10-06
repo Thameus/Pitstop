@@ -67,6 +67,8 @@ static class InstallerEngine
             if (!File.Exists(Path.Combine(tmp, "app", "Pitstop.exe")) ||
                 !File.Exists(Path.Combine(tmp, "instalar.ps1")) ||
                 !File.Exists(Path.Combine(tmp, "ferramentas.ps1")) ||
+                !File.Exists(Path.Combine(tmp, "third-party", "dotnet", "LICENSE-INFORMATION-WINDOWS.md")) ||
+                !File.Exists(Path.Combine(tmp, "third-party", "dotnet", "DOTNET-LIBRARY-LICENSE.html")) ||
                 !File.Exists(pit))
                 return 2;
 
@@ -102,6 +104,8 @@ static class InstallerEngine
 
             if (!File.Exists(Path.Combine(destino, "app", "Pitstop.exe")) ||
                 !File.Exists(Path.Combine(destino, "app", "pit.exe")) ||
+                !File.Exists(Path.Combine(destino, "third-party", "dotnet", "LICENSE-INFORMATION-WINDOWS.md")) ||
+                !File.Exists(Path.Combine(destino, "third-party", "dotnet", "DOTNET-LIBRARY-LICENSE.html")) ||
                 !File.Exists(Path.Combine(destino, "desinstalar.ps1")))
                 return 5;
 
@@ -112,6 +116,165 @@ static class InstallerEngine
         {
             try { if (Directory.Exists(destino)) Directory.Delete(destino, true); } catch { }
         }
+    }
+
+    public static int SmokeUpdate()
+    {
+        var destino = Path.Combine(Path.GetTempPath(), "pitstop-setup-update-smoke-" + Guid.NewGuid().ToString("N"));
+        var payload = Path.Combine(Path.GetTempPath(), "pitstop-setup-update-payload-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(destino, "app"));
+            Directory.CreateDirectory(Path.Combine(destino, "config"));
+            File.WriteAllText(Path.Combine(destino, "app", "versao-antiga.txt"), "antiga");
+            File.WriteAllText(Path.Combine(destino, ".env"), "JDK_HOME=C:\\jdk-teste");
+            File.WriteAllText(Path.Combine(destino, "config", "perfis.json"), "{\"perfis\":{\"teste\":{\"tipo\":\"comando\",\"comando\":\"echo ok\"}}}");
+
+            Directory.CreateDirectory(payload);
+            ExtractPayload(payload);
+            ApplyUpdatePayload(payload, destino);
+
+            if (!File.Exists(Path.Combine(destino, "app", "Pitstop.exe"))) return 12;
+            if (File.Exists(Path.Combine(destino, "app", "versao-antiga.txt"))) return 13;
+            if (File.ReadAllText(Path.Combine(destino, ".env")) != "JDK_HOME=C:\\jdk-teste") return 14;
+            if (!File.ReadAllText(Path.Combine(destino, "config", "perfis.json")).Contains("\"teste\"")) return 15;
+            return 0;
+        }
+        catch { return 16; }
+        finally
+        {
+            try { if (Directory.Exists(destino)) Directory.Delete(destino, true); } catch { }
+            try { if (Directory.Exists(payload)) Directory.Delete(payload, true); } catch { }
+        }
+    }
+
+    public static void UpdateExisting(string[] args)
+    {
+        var destinoArg = Argumento(args, "--destination")
+            ?? throw new ArgumentException("Falta --destination.");
+        var destino = NormalizeDestination(destinoArg);
+        var pidTxt = Argumento(args, "--parent-pid");
+        var reiniciar = args.Any(a => a.Equals("--restart", StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(pidTxt) && int.TryParse(pidTxt, out var pid) && pid > 0)
+        {
+            try
+            {
+                using var pai = Process.GetProcessById(pid);
+                if (!pai.WaitForExit(120_000))
+                    throw new TimeoutException("O Pitstop não encerrou no tempo esperado.");
+            }
+            catch (ArgumentException)
+            {
+                // O processo já terminou.
+            }
+        }
+
+        if (!Directory.Exists(destino))
+            throw new DirectoryNotFoundException("Instalação do Pitstop não encontrada: " + destino);
+
+        var tmp = Path.Combine(Path.GetTempPath(), "pitstop-update-payload-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        try
+        {
+            ExtractPayload(tmp);
+            ApplyUpdatePayload(tmp, destino);
+            UpdateInstalledAppRegistration(destino);
+        }
+        finally
+        {
+            try { Directory.Delete(tmp, true); } catch { }
+        }
+
+        if (reiniciar)
+        {
+            var exe = Path.Combine(destino, "app", "Pitstop.exe");
+            if (!File.Exists(exe)) throw new FileNotFoundException("Pitstop.exe não existe após a atualização.", exe);
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+    }
+
+    static void UpdateInstalledAppRegistration(string destino)
+    {
+        const string subKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Pitstop";
+        using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(subKey, writable: true);
+        if (key == null) return; // pacote portátil: não cria registro novo
+
+        var registrado = key.GetValue("InstallLocation") as string;
+        if (string.IsNullOrWhiteSpace(registrado) ||
+            !string.Equals(Path.GetFullPath(registrado).TrimEnd('\\'),
+                           Path.GetFullPath(destino).TrimEnd('\\'),
+                           StringComparison.OrdinalIgnoreCase))
+            return; // outra instalação/uma cópia portátil não altera este registro
+
+        var exe = Path.Combine(destino, "app", "Pitstop.exe");
+        var versao = FileVersionInfo.GetVersionInfo(exe).ProductVersion?.Split('+')[0] ?? "";
+        if (versao != "")
+            key.SetValue("DisplayVersion", versao, Microsoft.Win32.RegistryValueKind.String);
+        key.SetValue("DisplayIcon", exe + ",0", Microsoft.Win32.RegistryValueKind.String);
+        key.SetValue("InstallLocation", destino, Microsoft.Win32.RegistryValueKind.String);
+    }
+
+    static string? Argumento(string[] args, string nome)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+            if (args[i].Equals(nome, StringComparison.OrdinalIgnoreCase))
+                return args[i + 1];
+        return null;
+    }
+
+    static void ApplyUpdatePayload(string origem, string destino)
+    {
+        if (!File.Exists(Path.Combine(origem, "app", "Pitstop.exe")))
+            throw new InvalidDataException("Payload de atualização sem app\\Pitstop.exe.");
+
+        Directory.CreateDirectory(destino);
+
+        foreach (var nome in new[] { "app", "web", "third-party" })
+        {
+            var fonte = Path.Combine(origem, nome);
+            if (Directory.Exists(fonte)) ReplaceDirectory(fonte, Path.Combine(destino, nome));
+        }
+
+        foreach (var f in Directory.GetFiles(origem))
+            File.Copy(f, Path.Combine(destino, Path.GetFileName(f)), true);
+    }
+
+    static void ReplaceDirectory(string fonte, string alvo)
+    {
+        var nova = alvo + ".update-new";
+        var antiga = alvo + ".update-old";
+
+        if (Directory.Exists(nova)) Directory.Delete(nova, true);
+        if (Directory.Exists(antiga)) Directory.Delete(antiga, true);
+        CopyDirectory(fonte, nova);
+
+        var tinhaAntiga = Directory.Exists(alvo);
+        if (tinhaAntiga) Directory.Move(alvo, antiga);
+        try
+        {
+            Directory.Move(nova, alvo);
+            if (Directory.Exists(antiga)) Directory.Delete(antiga, true);
+        }
+        catch
+        {
+            try
+            {
+                if (Directory.Exists(alvo)) Directory.Delete(alvo, true);
+                if (tinhaAntiga && Directory.Exists(antiga)) Directory.Move(antiga, alvo);
+            }
+            catch { }
+            throw;
+        }
+    }
+
+    static void CopyDirectory(string origem, string destino)
+    {
+        Directory.CreateDirectory(destino);
+        foreach (var f in Directory.GetFiles(origem))
+            File.Copy(f, Path.Combine(destino, Path.GetFileName(f)), true);
+        foreach (var d in Directory.GetDirectories(origem))
+            CopyDirectory(d, Path.Combine(destino, Path.GetFileName(d)));
     }
 
     public static async Task InstallAsync(InstallOptions o, Action<string> log, CancellationToken ct = default)

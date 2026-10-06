@@ -29,6 +29,18 @@ export RUNNER_ABRIR_NAVEGADOR=false
 "$ROOT/app/pit" status
 [ -f "$ROOT/config/perfis.json" ] || { echo "config/perfis.json was not created"; exit 1; }
 
+# Atualização Linux: o .run deve trocar o programa sem tocar nos dados locais.
+UPDATE_ROOT="$TMP/update-install"
+mkdir -p "$UPDATE_ROOT/app" "$UPDATE_ROOT/config" "$TMP/home" "$TMP/xdg"
+printf '%s\n' old > "$UPDATE_ROOT/app/old.txt"
+printf '%s\n' 'JDK_HOME=/tmp/jdk-test' > "$UPDATE_ROOT/.env"
+printf '%s\n' '{"perfis":{"preservar":{"tipo":"comando","comando":"echo ok"}}}' > "$UPDATE_ROOT/config/perfis.json"
+HOME="$TMP/home" XDG_DATA_HOME="$TMP/xdg" sh "$RUN" --update "$UPDATE_ROOT"
+[ -x "$UPDATE_ROOT/app/Pitstop" ] || { echo "Linux update did not install Pitstop"; exit 1; }
+[ ! -f "$UPDATE_ROOT/app/old.txt" ] || { echo "Linux update left old app file"; exit 1; }
+grep -q '^JDK_HOME=/tmp/jdk-test$' "$UPDATE_ROOT/.env" || { echo "Linux update changed .env"; exit 1; }
+grep -q '"preservar"' "$UPDATE_ROOT/config/perfis.json" || { echo "Linux update changed perfis.json"; exit 1; }
+
 PORT=19999
 "$ROOT/app/pit" ui "$PORT" >"$TMP/ui.log" 2>&1 &
 PID=$!
@@ -62,4 +74,4 @@ RC=$?
 PID=""
 [ "$RC" = 0 ] || { cat "$TMP/ui.log"; echo "pit ui exited with $RC"; exit 1; }
 
-echo "LINUX PACKAGE SMOKE OK: self-extracting installer, self-contained CLI, HTTP protections and clean shutdown."
+echo "LINUX PACKAGE SMOKE OK: self-extracting installer, update preservation, self-contained CLI, HTTP protections and clean shutdown."

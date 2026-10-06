@@ -57,7 +57,8 @@ Aplicativo Avalonia:
 - assistente;
 - painéis dos perfis;
 - notificações;
-- autostart.
+- autostart;
+- atualização manual via GitHub Releases (`Atualizador.cs`), incluindo download, SHA-256 e backup mínimo.
 
 ### `Pitstop.Cli`
 
@@ -65,7 +66,7 @@ CLI `pit` e modo `pit ui`.
 
 ### `Pitstop.Setup.Windows`
 
-Instalador gráfico self-contained do Windows.
+Instalador gráfico self-contained do Windows. O mesmo executável também é usado pelo atualizador em modo `--update`: ele espera o processo antigo terminar, troca os diretórios do programa e reinicia o Pitstop sem tocar nos dados locais.
 
 ## `web/`
 
@@ -120,7 +121,9 @@ Documentação de manutenção, arquitetura de pastas e build/release.
 
 ## `third-party/`
 
-Licenças, notices e versões das dependências redistribuídas. Não mover ou excluir arquivos legais sem revisar os testes de pacote.
+Licenças, notices e versões das dependências redistribuídas. Cada subpasta preserva a procedência do componente em vez de concentrar textos diferentes em um único arquivo genérico. Em especial, `third-party/dotnet/` mantém a licença MIT upstream, o mapeamento oficial de licenças do .NET no Windows, a Microsoft .NET Library License e os third-party notices.
+
+Não mover, achatar ou excluir arquivos legais sem revisar os testes de pacote. Essa organização por componente foi mantida de propósito para facilitar auditoria, atualização de versões e rastreabilidade da origem de cada notice.
 
 ## Dados locais e arquivos gerados
 

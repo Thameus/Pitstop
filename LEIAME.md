@@ -52,7 +52,15 @@ Os pacotes `.tar.xz` também ficam disponíveis para uso portátil.
 
 ## Atualizar
 
-Instale a versão nova por cima da existente.
+Abra **Ajustes → Atualizações** e clique em **Buscar atualização**. A consulta só acontece quando você pedir; o Pitstop não mantém verificação em segundo plano.
+
+Se existir uma versão nova, use **Atualizar e reiniciar**. O Pitstop:
+
+1. baixa o instalador oficial do GitHub Release;
+2. confere o SHA-256 do arquivo;
+3. salva um backup pequeno de `.env` e `config/`;
+4. para os perfis em execução após sua confirmação;
+5. fecha, atualiza os arquivos do programa e abre novamente.
 
 Os dados locais são preservados:
 
@@ -61,6 +69,10 @@ Os dados locais são preservados:
 - `cache/`;
 - `logs/`;
 - `bases/`.
+
+Os backups mínimos ficam em `cache/update-backups/` e o Pitstop mantém apenas os três mais recentes.
+
+Também continua sendo possível baixar uma versão nova e instalá-la manualmente por cima da existente.
 
 ## Dependências
 

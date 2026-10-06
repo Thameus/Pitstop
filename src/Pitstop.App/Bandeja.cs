@@ -319,6 +319,28 @@ sealed class Bandeja
         await SairSemPerguntar();
     }
 
+    /// <summary>
+    /// Atualização: confirma a parada dos perfis, inicia o processo externo (que espera este PID terminar)
+    /// e encerra o Pitstop pelo mesmo caminho gracioso do menu Parar e Sair.
+    /// </summary>
+    public async Task<bool> SairParaAtualizar(Action iniciarAtualizador)
+    {
+        if (saindo) return false;
+        var rodando = runner.EmExecucao();
+        if (rodando.Length > 0)
+        {
+            AbrirJanela();
+            var ok = await Dialogo.Confirmar(janela!, "Parar e atualizar?",
+                "Vai parar " + string.Join(", ", rodando) + ", atualizar o Pitstop e abrir novamente.",
+                "Atualizar", () => { }, "sync");
+            if (!ok) return false;
+        }
+
+        iniciarAtualizador();
+        await SairSemPerguntar();
+        return true;
+    }
+
     async Task SairSemPerguntar()
     {
         if (saindo) return;
