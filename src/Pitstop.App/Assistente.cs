@@ -148,7 +148,7 @@ sealed class Assistente : Window
         var sp = new StackPanel();
         sp.Children.Add(Titulo("Bem-vindo ao Pitstop",
             "Sobe e para, com um clique, o que você usaria numa Run Configuration da IDE: Tomcat com os wars dos seus projetos, " +
-            "aplicações Java com main, pacotes prontos (.war, .zip, .jar) e scripts npm. Tudo roda na sua máquina, com log, " +
+            "aplicações Java com main, pacotes prontos (.war, .zip, .jar), scripts npm e comandos personalizados. Tudo roda na sua máquina, com log, " +
             "debug e build, pela janela, pela bandeja ou pelo terminal (pit)."));
         sp.Children.Add(Ui.Rotulo("O que você vai precisar (só o que for usar)").Also(t => t.Margin = new Thickness(0, 0, 0, 12)));
         var itens = new (string Icone, string Nome, string Para, string Link, string Url)[]

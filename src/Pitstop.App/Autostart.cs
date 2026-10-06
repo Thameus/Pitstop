@@ -56,7 +56,7 @@ static class Autostart
             "[Desktop Entry]",
             "Type=Application",
             "Name=Pitstop",
-            "Comment=Runner local de Tomcat, apps Java e scripts npm",
+            "Comment=Runner local de Tomcat, Java, npm e comandos personalizados",
             "Exec=" + Comando.Replace("%", "%%"),
             "Icon=" + Path.Combine(Raiz.Web, "icone.png"),
             "Terminal=false",

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pitstop Linux self-extracting installer. The .tar.xz payload is appended by empacotar.ps1.
+# Pitstop Linux self-extracting installer. O payload .tar.xz é anexado por scripts/release/empacotar.ps1.
 set -eu
 
 VERSION="@VERSION@"

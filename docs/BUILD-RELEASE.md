@@ -1,0 +1,166 @@
+# Build, CI e Release
+
+## Desenvolvimento
+
+Requisito: .NET 10 SDK definido em `global.json`.
+
+### Windows
+
+```powershell
+.\build.cmd
+```
+
+O script procura `dotnet` no PATH e também em `%ProgramFiles%\dotnet\dotnet.exe`.
+
+Saída: `app/`.
+
+### Linux
+
+```sh
+sh ./build.sh
+```
+
+Saída: `app/`.
+
+## Smoke do código
+
+```powershell
+pwsh ./tests/smoke.ps1
+```
+
+O smoke usa uma raiz temporária e não deve alterar a configuração real do usuário. Entre outras coisas ele valida:
+
+- CLI;
+- servidor HTTP;
+- proteções da API;
+- ciclo de vida dos perfis;
+- perfil Comando;
+- fail-fast;
+- mesma sessão de shell;
+- `.env` + env inline;
+- fallback da pasta;
+- timeout;
+- autostart bloqueado em teste;
+- restart/stop;
+- rotação de logs.
+
+## Empacotamento
+
+Entry point compatível:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\empacotar.ps1
+```
+
+Implementação:
+
+`scripts/release/empacotar.ps1`
+
+O empacotador:
+
+1. publica App e CLI self-contained para cada RID;
+2. monta uma área `dist/stage`;
+3. copia apenas arquivos permitidos;
+4. achata os scripts de `scripts/install/` para a raiz do pacote;
+5. inclui `web/`, notices e licenças;
+6. gera os `.tar.xz`;
+7. gera o instalador Windows;
+8. gera o `.run` Linux;
+9. grava `SHA256SUMS.txt`.
+
+Arquivos locais como `.env`, `config/`, `cache/`, `logs/` e `bases/` nunca entram no pacote.
+
+## Teste dos pacotes
+
+Depois de empacotar:
+
+```powershell
+pwsh ./tests/smoke-package.ps1
+```
+
+O workflow também executa:
+
+```sh
+sh ./tests/smoke-package-linux.sh dist
+```
+
+em Ubuntu usando exatamente o pacote produzido.
+
+## CI
+
+`.github/workflows/ci.yml` roda em:
+
+- Windows Server 2025;
+- Ubuntu 24.04.
+
+Ele executa:
+
+1. checkout;
+2. setup do .NET;
+3. build Release;
+4. validação sintática dos scripts shell;
+5. smoke principal.
+
+CodeQL roda separadamente.
+
+## Publicar uma versão
+
+A versão oficial fica em:
+
+`src/Directory.Build.props`
+
+Exemplo:
+
+```xml
+<Version>3.0.3</Version>
+```
+
+Fluxo:
+
+1. alterar a versão em branch;
+2. abrir PR;
+3. esperar CI + CodeQL;
+4. mergear;
+5. atualizar a `main` local;
+6. criar tag anotada:
+   ```powershell
+   git tag -a v3.0.3 -m "Pitstop 3.0.3"
+   git push origin v3.0.3
+   ```
+7. acompanhar o workflow Release.
+
+O workflow rejeita uma tag que não corresponda ao `<Version>`.
+
+## Workflow de Release
+
+`.github/workflows/release.yml` é disparado por tags `v*`.
+
+Etapas:
+
+1. validar tag e suporte a xz;
+2. executar `scripts/release/empacotar.ps1`;
+3. rodar smoke dos arquivos gerados;
+4. subir o release candidate como artifact;
+5. baixar o artifact em Ubuntu;
+6. executar o pacote Linux;
+7. publicar a GitHub Release.
+
+## Artefatos esperados
+
+```text
+pitstop-<versão>-setup-win-x64.exe
+pitstop-<versão>-win-x64.tar.xz
+pitstop-<versão>-linux-x64.run
+pitstop-<versão>-linux-x64.tar.xz
+SHA256SUMS.txt
+```
+
+## Assinatura Windows
+
+O empacotador mantém suporte opcional a Authenticode:
+
+```powershell
+.\empacotar.ps1 -Assinar -Certificado <SHA1>
+```
+
+Também pode usar `PITSTOP_CERT_SHA1` no ambiente. Nenhum certificado ou segredo deve ser salvo no repositório.
