@@ -32,6 +32,7 @@ public sealed class Perfil
     public bool EhTomcat => Tipo is "tomcat" or "war";
     public bool EhJava => Tipo is "java" or "zip";
     public bool EhNpm => Tipo == "npm";
+    public bool EhComando => Tipo == "comando";
     public bool EhWar => Tipo == "war";
     public bool EhZip => Tipo == "zip";
 
@@ -86,6 +87,15 @@ public sealed class Perfil
     public string Env { get; init; } = "";
     /// <summary>Comando do botão Build (roda na pasta); vazio = sem build.</summary>
     public string Build { get; init; } = "";
+
+    // comando genérico; reutiliza Pasta, Env, Porta, Url, ProntoLog, Cache e Base
+    public string Comando { get; init; } = "";
+    public string ShellComando { get; init; } = "auto";
+    public string ShellPersonalizado { get; init; } = "";
+    public string EnvArquivo { get; init; } = "";
+    public bool AbrirNavegadorPronto { get; init; }
+    public bool AutoIniciar { get; init; }
+    public int? TimeoutExecucaoSeg { get; init; }
 }
 
 /// <summary>config/perfis.json + globais do .env (o .env manda sobre o bloco global; o perfil ainda sobrescreve).</summary>
@@ -137,6 +147,7 @@ public static class Config
     {
         if (cfg is not JsonObject obj || obj["perfis"] is null) throw new ErroRunner("config inválida: falta \"perfis\"");
         ValidarNomesPerfis(obj);
+        ValidarPerfisComando(obj);
         if (JsonAux.Txt(obj, "_versao") is { } lida && lida != Versao())
             throw new ErroRunner("perfis.json mudou fora desta tela (outra aba ou edição manual): recarregue a tela (F5) e refaça a alteração");
         var salvar = (JsonObject)obj.DeepClone();
@@ -170,6 +181,14 @@ public static class Config
         foreach (var nome in perfis.Select(kv => kv.Key))
             if (!NomeValido(nome))
                 throw new ErroRunner("nome de perfil inválido: " + nome + " (use até 64 letras/números e - . _, sem ponto no início/fim)");
+    }
+
+    static void ValidarPerfisComando(JsonObject cfg)
+    {
+        if (cfg["perfis"] is not JsonObject perfis) return;
+        foreach (var (nome, node) in perfis)
+            if (node is JsonObject p && JsonAux.Txt(p, "tipo") == "comando")
+                ComandoApp.Validar(PerfilComando(cfg, nome, p));
     }
 
     /// <summary>
@@ -207,6 +226,7 @@ public static class Config
             case "java": return PerfilJava(cfg, nome, p);
             case "zip": return PerfilZip(cfg, nome, p);
             case "npm": return PerfilNpm(cfg, nome, p);
+            case "comando": return PerfilComando(cfg, nome, p);
         }
         var war = tipo == "war";
         var cache = Path.Combine(Raiz.Dir, "cache", nome);
@@ -344,6 +364,50 @@ public static class Config
     /// (Vite) ou "Local: http" (Vite/Next). Falha de compilação não marca pronto, mas o servidor segue no ar.
     /// </summary>
     const string ProntoNpm = @"(?i)compiled successfully|compiled with warnings|ready in \d|Local:\s+https?://";
+
+    static bool Sim(JsonObject p, string chave) =>
+        p.TryGetPropertyValue(chave, out var v) && v is JsonValue jv && jv.TryGetValue<bool>(out var b) && b;
+
+    /// <summary>Perfil "comando": usa a pasta do perfil, depois a pasta global de projetos e por fim o HOME.</summary>
+    static Perfil PerfilComando(JsonObject cfg, string nome, JsonObject p)
+    {
+        var pastaPerfil = JsonAux.Txt(p, "pasta");
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(home))
+            home = Environment.GetEnvironmentVariable(OperatingSystem.IsWindows() ? "USERPROFILE" : "HOME") ?? Raiz.Dir;
+        string pasta;
+        if (!string.IsNullOrWhiteSpace(pastaPerfil))
+        {
+            pasta = Path.GetFullPath(pastaPerfil, Raiz.Dir);
+        }
+        else
+        {
+            var global = JsonAux.Txt(cfg, "projetosDir");
+            var pastaGlobal = !string.IsNullOrWhiteSpace(global) ? Path.GetFullPath(global, Raiz.Dir) : null;
+            pasta = pastaGlobal != null && Directory.Exists(pastaGlobal) ? pastaGlobal : Path.GetFullPath(home);
+        }
+        var cache = Path.Combine(Raiz.Dir, "cache", nome);
+        var envArq = JsonAux.Txt(p, "envArquivo");
+        return new Perfil
+        {
+            Nome = nome,
+            Tipo = "comando",
+            Pasta = pasta,
+            Comando = JsonAux.Txt(p, "comando") ?? "",
+            ShellComando = JsonAux.Txt(p, "shell") ?? "auto",
+            ShellPersonalizado = JsonAux.Txt(p, "shellPersonalizado") ?? "",
+            Env = JsonAux.Txt(p, "env") ?? "",
+            EnvArquivo = envArq != null ? Path.GetFullPath(envArq, Raiz.Dir) : "",
+            Porta = JsonAux.Num(p, "porta") ?? 0,
+            Url = JsonAux.Txt(p, "url"),
+            ProntoLog = JsonAux.Txt(p, "prontoLog") ?? "",
+            AbrirNavegadorPronto = Sim(p, "abrirNavegadorPronto"),
+            AutoIniciar = Sim(p, "autoIniciar"),
+            TimeoutExecucaoSeg = JsonAux.Num(p, "timeoutExecucaoSeg"),
+            Cache = cache,
+            Base = cache,
+        };
+    }
 
     /// <summary>Perfil "npm": npm run &lt;script&gt; na pasta do package.json. prontoLog vazio = padrão dos dev servers.</summary>
     static Perfil PerfilNpm(JsonObject cfg, string nome, JsonObject p)

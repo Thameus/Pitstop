@@ -16,8 +16,16 @@ public sealed class Execucao
     public Regex? ProntoRe { get; init; }
     public bool Parando { get; set; }
     public bool Cancelado { get; set; }
-    /// <summary>App Java fechado pela própria janela sai com 0: fechamento normal, não queda.</summary>
+    /// <summary>App Java e Comando com saída 0 encerram normalmente, sem estado de queda.</summary>
     public bool SaidaZeroNormal { get; init; }
+    public string? MarcadorComando { get; init; }
+    public IReadOnlyDictionary<int, string>? LinhasComando { get; init; }
+    public int? LinhaAtual { get; set; }
+    public string? ScriptTemporario { get; init; }
+    public string? MotivoParada { get; set; }
+    public int? PortaPronto { get; init; }
+    public bool PortaOcupadaAntes { get; init; }
+    public string? AbrirUrlAoPronto { get; init; }
 }
 
 /// <summary>Resultado da última execução encerrada (status/tray: balão de pronto, caiu, build ok/falhou).</summary>
@@ -28,7 +36,8 @@ public sealed class Ultimo
     public int? Codigo { get; init; }
     public bool? Cancelado { get; init; }
     public string? Erro { get; init; }
-    /// <summary>false = saiu sem parar() pedido (caiu).</summary>
+    public string? Motivo { get; init; }
+    /// <summary>false = saiu sem parar() pedido (caiu). Comando sempre volta a Parado e usa Motivo/Codigo no histórico.</summary>
     public bool? Parado { get; init; }
     public long Fim { get; init; }
     public long Duracao { get; init; }
@@ -55,6 +64,8 @@ public sealed class StatusPerfil
     /// <summary>Perfil "zip": o .zip ou .jar; perfil "war": os wars (; entre eles). Nulo = roda do código.</summary>
     public string? Pacote { get; init; }
     public string? Script { get; init; }
+    public string? Comando { get; init; }
+    public string? Pasta { get; init; }
     public bool EmUso { get; init; }
     public StatusExecucao? Execucao { get; init; }
     public Ultimo? Ultimo { get; init; }
@@ -80,13 +91,32 @@ public sealed class Runner
     readonly Dictionary<string, Execucao> estado = new();
     readonly Dictionary<string, Reserva> reservas = new();
     readonly Dictionary<string, Ultimo> ultimos = new();
+    readonly Dictionary<string, LogArquivoComando> arquivosLogComando = new();
     /// <summary>Reinício em andamento (parar + subir): cobre o intervalo em que o perfil não tem processo nem reserva.</summary>
     readonly Dictionary<string, Reserva> reinicios = new();
     bool saindo;
 
     public bool Saindo { get { lock (trava) return saindo; } }
 
-    void Log(string nome, string texto) => Logs.Log(nome, texto);
+    void Log(string nome, string texto)
+    {
+        Logs.Log(nome, texto);
+        LogArquivoComando? arquivo;
+        lock (trava) arquivosLogComando.TryGetValue(nome, out arquivo);
+        arquivo?.Escrever(texto);
+    }
+
+    void MarcarPronto(string nome, Execucao reg)
+    {
+        string? abrir = null;
+        lock (trava)
+        {
+            if (estado.GetValueOrDefault(nome) != reg || reg.Pronto != null) return;
+            reg.Pronto = Agora.Ms;
+            abrir = reg.AbrirUrlAoPronto;
+        }
+        if (abrir != null) Proc.AbrirUrl(abrir);
+    }
 
     Execucao? Em(string nome)
     {
@@ -164,10 +194,22 @@ public sealed class Runner
             if (l == null) return;
             if (l.Contains('\x1B')) l = Ansi.Replace(l, "");
             if (filtro != null) { if (filtro(l)) Log(nome, l); return; }
-            // porta aberta não é deploy pronto: "Server startup in" marca o fim da subida
+
             var reg = Em(nome);
+            if (reg != null && reg.Child == child && reg.MarcadorComando is { } marcador &&
+                l.StartsWith("@@PIT:" + marcador + ":", StringComparison.Ordinal) && l.EndsWith("@@", StringComparison.Ordinal))
+            {
+                var miolo = l[("@@PIT:" + marcador + ":").Length..^2];
+                if (int.TryParse(miolo, out var numero) && reg.LinhasComando?.TryGetValue(numero, out var comando) == true)
+                {
+                    reg.LinhaAtual = numero;
+                    Log(nome, "[pit] executando linha " + numero + ": " + comando);
+                    return;
+                }
+            }
+            // porta aberta não é deploy pronto: "Server startup in"/prontoLog marca o fim da subida.
             if (reg != null && reg.Child == child && reg.Pronto == null && Casa(reg.ProntoRe, l))
-                lock (trava) reg.Pronto = Agora.Ms;
+                MarcarPronto(nome, reg);
             Log(nome, l);
         }
         child.OutputDataReceived += (_, e) => Sai(e.Data);
@@ -182,27 +224,207 @@ public sealed class Runner
         var child = reg.Child;
         lock (trava) estado[nome] = reg;
         Encaminhar(nome, child, reg.Tipo == "build" ? (filtrar ? LinhaBuild : LinhaNaoVazia) : null);
-        // sem padrão de log (app Java sem prontoLog): "pronto" = continua vivo depois de 3 s
-        if (reg.Tipo != "build" && reg.ProntoRe == null)
-            _ = Task.Delay(3000).ContinueWith(_ => { lock (trava) if (estado.GetValueOrDefault(nome) == reg) reg.Pronto = Agora.Ms; });
+        // sem critério explícito: apps existentes ficam prontos após 3 s; Comando fica pronto ao iniciar.
+        if (reg.Tipo != "build" && reg.ProntoRe == null && reg.PortaPronto == null)
+        {
+            if (reg.Tipo == "comando") MarcarPronto(nome, reg);
+            else _ = Task.Delay(3000).ContinueWith(_ => MarcarPronto(nome, reg));
+        }
         return Task.Run(async () =>
         {
             await child.WaitForExitAsync().ConfigureAwait(false);
             var code = child.ExitCode;
+            if (reg.Tipo == "comando" && code != 0 && reg.LinhaAtual is int ln &&
+                reg.LinhasComando?.TryGetValue(ln, out var comandoFalhou) == true)
+                Log(nome, "[pit] falha na linha " + ln + ": " + comandoFalhou + " (código " + code + ")");
             Log(nome, "[pit] " + reg.Tipo + " terminou (código " + code + ")");
-            // build registra o resultado do conjunto em Build(); Tomcat sem parar() pedido = caiu
+
+            // Comando sempre volta ao estado Parado; o resultado fica em Ultimo. Nos tipos antigos, saída inesperada continua sendo queda.
+            var comando = reg.Tipo == "comando";
             var normal = reg.Parando || (reg.SaidaZeroNormal && code == 0);
+            var motivo = reg.MotivoParada ?? (comando ? (code == 0 ? "sucesso" : "falha") : null);
+            LogArquivoComando? arquivo = null;
             lock (trava)
             {
                 if (reg.Tipo != "build")
                     ultimos[nome] = new Ultimo
                     {
-                        Tipo = reg.Tipo, Ok = normal, Codigo = code, Parado = normal, Fim = Agora.Ms, Duracao = Agora.Ms - reg.Inicio,
+                        Tipo = reg.Tipo,
+                        Ok = comando ? code == 0 && motivo == "sucesso" : normal,
+                        Codigo = code,
+                        Cancelado = motivo == "usuario" ? true : null,
+                        Motivo = motivo,
+                        Parado = comando ? true : normal,
+                        Fim = Agora.Ms,
+                        Duracao = Agora.Ms - reg.Inicio,
                     };
                 if (estado.GetValueOrDefault(nome)?.Child == child) estado.Remove(nome);
+                if (comando && arquivosLogComando.Remove(nome, out var arq)) arquivo = arq;
             }
+            arquivo?.Dispose();
+            if (reg.ScriptTemporario != null) ComandoApp.ApagarScript(reg.ScriptTemporario);
             return code;
         });
+    }
+
+    // ---------------------------------------------------------------- comando genérico
+
+    async Task IniciarComando(string nome, Perfil p, bool debug)
+    {
+        if (debug) throw new ErroRunner("perfil Comando não tem modo Depurar");
+        var res = Reservar(nome, "comando");
+        ComandoApp.Preparado? preparado = null;
+        LogArquivoComando? arquivo = null;
+        try
+        {
+            ComandoApp.Validar(p);
+            if (PidArquivo.Ler(p) is { } existente && PidArquivo.Vivo(existente, ComandoApp.NomeProcessoShell(p)))
+                throw new ErroRunner(p.Nome + " já está rodando fora desta tela (pid " + existente.Pid + ")");
+
+            var portaOcupada = p.Porta > 0 && await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
+            Directory.CreateDirectory(p.Cache);
+            arquivo = LogArquivoComando.Abrir(p);
+            lock (trava) arquivosLogComando[nome] = arquivo;
+
+            var marcador = Guid.NewGuid().ToString("N");
+            preparado = ComandoApp.Preparar(p, redirecionar: true, marcador);
+            var linhas = ComandoApp.Linhas(p.Comando).ToDictionary(x => x.Numero, x => x.Texto);
+            Log(nome, "[pit] comando | pasta " + p.Pasta + " | shell " + (p.ShellComando == "" ? "auto" : p.ShellComando));
+            if (portaOcupada)
+                Log(nome, "[pit] AVISO porta " + p.Porta + " já estava em uso antes desta execução; ela não confirmará prontidão até ficar livre e abrir de novo");
+
+            ChecarCancelado(res, "subida cancelada");
+            var child = Proc.Disparar(preparado.Info);
+            PidArquivo.Gravar(p, child);
+            var reg = new Execucao
+            {
+                Child = child,
+                Tipo = "comando",
+                SaidaZeroNormal = true,
+                MarcadorComando = marcador,
+                LinhasComando = linhas,
+                ScriptTemporario = preparado.Script,
+                ProntoRe = p.ProntoLog != ""
+                    ? new Regex(Regex.Escape(p.ProntoLog), RegexOptions.None, TimeSpan.FromMilliseconds(200))
+                    : null,
+                PortaPronto = p.ProntoLog == "" && p.Porta > 0 ? p.Porta : null,
+                PortaOcupadaAntes = portaOcupada,
+                AbrirUrlAoPronto = p.AbrirNavegadorPronto ? p.Url : null,
+            };
+            _ = Acoplar(nome, reg);
+
+            if (reg.PortaPronto is int porta)
+                _ = ObservarPortaComando(nome, reg, porta);
+            if (reg.ProntoRe != null || reg.PortaPronto != null)
+                _ = AvisarProntidaoDemorada(nome, reg);
+            if (p.TimeoutExecucaoSeg is int timeout)
+                _ = AplicarTimeoutComando(nome, reg, timeout);
+
+            preparado = null; // o Acoplar remove o script no término
+            arquivo = null;   // o Acoplar fecha e rotaciona o arquivo
+        }
+        catch
+        {
+            if (preparado != null) ComandoApp.ApagarScript(preparado.Script);
+            if (arquivo != null)
+            {
+                lock (trava) arquivosLogComando.Remove(nome);
+                arquivo.Dispose();
+            }
+            throw;
+        }
+        finally { Liberar(nome, res); }
+    }
+
+    async Task ObservarPortaComando(string nome, Execucao reg, int porta)
+    {
+        var viuLivre = !reg.PortaOcupadaAntes;
+        while (Em(nome) == reg)
+        {
+            var ocupada = await Proc.PortaOcupada(porta).ConfigureAwait(false);
+            if (!ocupada) viuLivre = true;
+            else if (viuLivre)
+            {
+                MarcarPronto(nome, reg);
+                return;
+            }
+            await Task.Delay(300).ConfigureAwait(false);
+        }
+    }
+
+    async Task AvisarProntidaoDemorada(string nome, Execucao reg)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(ComandoApp.ProntoTimeoutSeg)).ConfigureAwait(false);
+        if (Em(nome) == reg && reg.Pronto == null)
+            Log(nome, "[pit] AVISO ainda não foi possível confirmar que o serviço está pronto; o processo continua rodando");
+    }
+
+    async Task AplicarTimeoutComando(string nome, Execucao reg, int segundos)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(segundos)).ConfigureAwait(false);
+        if (Em(nome) != reg || reg.Parando) return;
+        reg.MotivoParada = "timeout";
+        reg.Parando = true;
+        Log(nome, "[pit] tempo limite de execução atingido (" + segundos + "s); encerrando...");
+        await EncerrarComando(nome, reg.Child.Id, () => Em(nome) == reg).ConfigureAwait(false);
+    }
+
+    async Task EncerrarComando(string nome, int pid, Func<bool> vivo)
+    {
+        So.Encerrar(pid, false);
+        var fim = Agora.Ms + ComandoApp.StopTimeoutSeg * 1000L;
+        while (vivo() && Agora.Ms < fim) await Task.Delay(200).ConfigureAwait(false);
+        if (!vivo()) return;
+        Log(nome, "[pit] não encerrou em " + ComandoApp.StopTimeoutSeg + "s; forçando a árvore do processo " + pid);
+        So.Encerrar(pid, true);
+    }
+
+    async Task PararComando(string nome, Perfil p, Execucao? e)
+    {
+        PidArquivo.Registro? externo = null;
+        int pid;
+        if (e != null)
+        {
+            e.Parando = true;
+            e.MotivoParada ??= "usuario";
+            pid = e.Child.Id;
+        }
+        else
+        {
+            externo = PidArquivo.Ler(p);
+            if (externo == null || !PidArquivo.Vivo(externo.Value, ComandoApp.NomeProcessoShell(p)))
+            {
+                Log(nome, "[pit] " + nome + " não está no ar pelo runner (sem processo nem pit.pid vivo)");
+                return;
+            }
+            pid = externo.Value.Pid;
+        }
+        Log(nome, "[pit] parando comando (árvore do pid " + pid + ")...");
+        bool Vivo() => e != null ? Em(nome) == e : PidArquivo.Vivo(externo!.Value, ComandoApp.NomeProcessoShell(p));
+        await EncerrarComando(nome, pid, Vivo).ConfigureAwait(false);
+    }
+
+    public Process LancarComandoConsole(Perfil p, out string script)
+    {
+        ComandoApp.Validar(p);
+        var preparado = ComandoApp.Preparar(p, redirecionar: false, "");
+        script = preparado.Script;
+        var child = Proc.Disparar(preparado.Info);
+        PidArquivo.Gravar(p, child);
+        return child;
+    }
+
+    public async Task IniciarAutomaticos()
+    {
+        if (Environment.GetEnvironmentVariable("PIT_SEM_AUTOSTART") == "1") return;
+        var cfg = Config.Ler();
+        foreach (var nome in Config.NomesPerfis(cfg))
+        {
+            var p = Config.LerPerfil(cfg, nome);
+            if (!p.EhComando || !p.AutoIniciar) continue;
+            try { await Iniciar(nome, false).ConfigureAwait(false); }
+            catch (Exception ex) { Log(nome, "[pit] ERRO início automático: " + ex.Message); }
+        }
     }
 
     // ---------------------------------------------------------------- Tomcat
@@ -210,6 +432,7 @@ public sealed class Runner
     public async Task Iniciar(string nome, bool debug, bool semCompilar = false)
     {
         var p = Config.LerPerfil(Config.Ler(), nome);
+        if (p.EhComando) { await IniciarComando(nome, p, debug).ConfigureAwait(false); return; }
         if (p.EhJava) { await IniciarJava(nome, p, debug, semCompilar).ConfigureAwait(false); return; }
         if (p.EhNpm) { await IniciarNpm(nome, p, debug).ConfigureAwait(false); return; }
         var res = Reservar(nome, debug ? "debug" : "tomcat");
@@ -325,6 +548,13 @@ public sealed class Runner
     /// </summary>
     public static async Task ChecarLivre(Perfil p, bool debug)
     {
+        if (p.EhComando)
+        {
+            if (debug) throw new ErroRunner("perfil Comando não tem modo Depurar");
+            if (PidArquivo.Ler(p) is { } rc && PidArquivo.Vivo(rc, ComandoApp.NomeProcessoShell(p)))
+                throw new ErroRunner(p.Nome + " já está rodando fora desta tela (pid " + rc.Pid + ")");
+            return;
+        }
         if (!p.EhJava && await Proc.PortaOcupada(p.Porta).ConfigureAwait(false)) throw new ErroRunner("porta " + p.Porta + " em uso (IntelliJ ou outro perfil no ar?)");
         if (debug && await Proc.PortaOcupada(p.PortaDebug).ConfigureAwait(false)) throw new ErroRunner("porta de debug " + p.PortaDebug + " em uso");
         if (!p.EhTomcat)
@@ -372,6 +602,7 @@ public sealed class Runner
             So.Encerrar(e.Child.Id, true);
             return;
         }
+        if (p.EhComando) { await PararComando(nome, p, e).ConfigureAwait(false); return; }
         if (p.EhJava) { await PararJava(nome, p, e).ConfigureAwait(false); return; }
         if (p.EhNpm) { await PararNpm(nome, p, e).ConfigureAwait(false); return; }
         // subiu pelo terminal (pit up) ou por outra instância: só o arquivo de pid sabe quem é. Sem processo e sem
@@ -587,7 +818,8 @@ public sealed class Runner
     // ---------------------------------------------------------------- npm (perfil tipo "npm", ex.: frontend Angular)
 
     /// <summary>Processo gravado no pit.pid: o Tomcat e o npm sobem pelo shell (cmd/sh); o app Java é o próprio java.</summary>
-    public static string ExePid(Perfil p) => p.EhJava ? "java" : So.Shell;
+    public static string ExePid(Perfil p) =>
+        p.EhJava ? "java" : p.EhComando ? ComandoApp.NomeProcessoShell(p) : So.Shell;
 
     /// <summary>Sobe npm run &lt;script&gt;. Sem depurar: o código do dev server roda no navegador.</summary>
     public Process LancarNpm(string nome, Perfil p, bool console)
@@ -735,6 +967,7 @@ public sealed class Runner
     async Task<Reserva> ReservarBuild(string nome)
     {
         var p = Config.LerPerfil(Config.Ler(), nome);
+        if (p.EhComando) throw new ErroRunner("perfil Comando não tem Build");
         var travado = p.Tipo switch
         {
             "java" => " (o java em execução usa o classpath.jar)",
@@ -872,7 +1105,8 @@ public sealed class Runner
         var p = Config.LerPerfil(Config.Ler(), nome);
         if (p.EhWar || p.EhZip) throw new ErroRunner("sync não se aplica a pacote pronto: o Build extrai o pacote de novo");
         if (!p.EhTomcat) throw new ErroRunner("sync é do Tomcat (war exploded); " +
-            (p.EhJava ? "aplicação Java roda direto do target/classes" : "o dev server do npm recarrega sozinho"));
+            (p.EhComando ? "perfil Comando não tem Sync" :
+             p.EhJava ? "aplicação Java roda direto do target/classes" : "o dev server do npm recarrega sozinho"));
         var total = 0;
         foreach (var a in p.Artefatos)
         {
@@ -911,6 +1145,17 @@ public sealed class Runner
                     : reinicios.GetValueOrDefault(nome) is { } ri ? new StatusExecucao { Tipo = "reinicio", Desde = ri.Inicio }
                     : null;
                 u = ultimos.GetValueOrDefault(nome);
+            }
+            if (p.EhComando)
+            {
+                var r = e == null ? PidArquivo.Ler(p) : null;
+                return new StatusPerfil
+                {
+                    Nome = nome, Tipo = "comando", Porta = p.Porta > 0 ? p.Porta : null, Url = p.Url,
+                    Comando = ComandoApp.Linhas(p.Comando).FirstOrDefault().Texto, Pasta = p.Pasta,
+                    EmUso = e != null || (r != null && PidArquivo.Vivo(r.Value, ComandoApp.NomeProcessoShell(p))),
+                    Execucao = exec, Ultimo = u,
+                };
             }
             if (p.EhJava)
             {
@@ -980,6 +1225,7 @@ public sealed class Runner
                     return new ResultadoAcao { Copiados = Sync(nome) };
                 case "preparar":
                     var pp = Config.LerPerfil(Config.Ler(), nome);
+                    if (pp.EhComando) throw new ErroRunner("perfil Comando não tem ação Preparar");
                     return new ResultadoAcao { Publicado = pp.EhTomcat ? Tomcat.PrepararBase(pp) : [] };
                 case "limpar":
                     Logs.Limpar(nome);
@@ -988,6 +1234,11 @@ public sealed class Runner
                     var url = Config.LerPerfil(Config.Ler(), nome).Url
                               ?? throw new ErroRunner("perfil sem URL (aplicação Java abre a própria janela)");
                     Proc.AbrirUrl(url);
+                    break;
+                case "terminal":
+                    var pt = Config.LerPerfil(Config.Ler(), nome);
+                    if (!pt.EhComando) throw new ErroRunner("Abrir terminal se aplica ao perfil Comando");
+                    ComandoApp.AbrirTerminal(pt);
                     break;
                 default:
                     throw new ErroRunner("ação desconhecida: " + acao);

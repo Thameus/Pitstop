@@ -66,6 +66,7 @@ static class Cli
                     {
                         "java" => "  [java] " + (s.MainClass ?? s.Pacote),
                         "npm" => "  [npm] " + s.Script + "  :" + s.Porta + "  " + s.Url,
+                        "comando" => "  [comando] " + (s.Comando ?? "") + (s.Porta is int pc ? "  :" + pc : ""),
                         _ => "  :" + s.Porta + "  " + s.Url,
                     });
                 foreach (var a in s.Artefatos)
@@ -77,6 +78,13 @@ static class Cli
         if (nome == null) throw new ErroRunner("informe o perfil. Ex.: pit up meu-tomcat");
         var p = Config.LerPerfil(Config.Ler(), nome);
 
+        if (cmd == "logs")
+        {
+            if (!p.EhComando) throw new ErroRunner("logs persistidos se aplicam ao perfil Comando");
+            foreach (var l in LogArquivoComando.LerUltimo(p, Config.ReplayMax)) Console.WriteLine(l);
+            return 0;
+        }
+
         switch (cmd)
         {
             case "build":
@@ -86,9 +94,15 @@ static class Cli
                 runner.Sync(nome);
                 return 0;
             case "down":
+            case "stop":
                 await runner.Parar(nome);
                 return 0;
+            case "restart":
+                await runner.Parar(nome);
+                p = Config.LerPerfil(Config.Ler(), nome);
+                return await Up(runner, p, Flag("--debug"), Flag("--build"), Flag("--sem-compilar"));
             case "up":
+            case "start":
                 return await Up(runner, p, Flag("--debug"), Flag("--build"), Flag("--sem-compilar"));
             default:
                 throw new ErroRunner("comando desconhecido: " + cmd);
@@ -101,7 +115,15 @@ static class Cli
         // morreria antes e (no Windows) o Job Object derrubaria o filho sem o shutdown dele.
         using var sinal = PosixSignalRegistration.Create(PosixSignal.SIGINT, c => c.Cancel = true);
         System.Diagnostics.Process child;
-        if (p.EhJava)
+        string? scriptComando = null;
+        if (p.EhComando)
+        {
+            if (debug) throw new ErroRunner("perfil Comando não tem modo Depurar");
+            if (build) throw new ErroRunner("perfil Comando não tem Build");
+            await Runner.ChecarLivre(p, false);
+            child = runner.LancarComandoConsole(p, out scriptComando);
+        }
+        else if (p.EhJava)
         {
             // app Java no terminal: compila o que mudou (ou tudo com --build), sobe com a saída aqui
             Runner.ValidarJava(p);
@@ -135,8 +157,15 @@ static class Cli
             child = Tomcat.Catalina(p, debug ? "jpda run" : "run", debug, redirecionar: false);
             PidArquivo.Gravar(p, child);
         }
-        await child.WaitForExitAsync();
-        return child.ExitCode;
+        try
+        {
+            await child.WaitForExitAsync();
+            return child.ExitCode;
+        }
+        finally
+        {
+            if (scriptComando != null) ComandoApp.ApagarScript(scriptComando);
+        }
     }
 
     /// <summary>Tela com console: fechar a janela ou Ctrl+C derruba o runner e os Tomcats dele.</summary>
@@ -169,6 +198,8 @@ static class Cli
         using var s2 = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, c => { c.Cancel = true; Encerrar(); });
         using var s3 = PosixSignalRegistration.Create(PosixSignal.SIGHUP, c => { c.Cancel = true; Encerrar(); });
         using var s4 = PosixSignalRegistration.Create(PosixSignal.SIGTERM, c => { c.Cancel = true; Encerrar(); });
+        try { await runner.IniciarAutomaticos(); }
+        catch (Exception ex) { Console.Error.WriteLine("[pit] ERRO início automático: " + ex.Message); }
         Console.WriteLine("Pitstop em " + srv.Endereco + "  (Ctrl+C ou fechar o terminal para o runner e o que ele subiu)");
         Abrir();
         await Task.Delay(Timeout.Infinite);
@@ -180,7 +211,10 @@ static class Cli
           ui [porta]                         tela web (padrão 9999 / RUNNER_PORTA)
           up <perfil> [--debug] [--build]    sobe no terminal atual (Ctrl+C para parar)
           up <app> [--sem-compilar]          app Java: não compila antes
-          down <perfil>                      para (Tomcat: catalina stop; app Java: pede para fechar; npm: derruba o node)
+          down|stop <perfil>                 para o perfil
+          start|up <perfil>                  inicia no terminal atual
+          restart <perfil>                   para e inicia novamente no terminal
+          logs <perfil>                      último log persistido de um perfil Comando
           build <perfil>                     build dos artefatos ativos
           sync <perfil>                      copia estáticos/classes para a pasta explodida
           status                             perfis, NO AR/parado, docBase resolvido

@@ -75,6 +75,7 @@ sealed class Bandeja
             if (await servidor.Iniciar())
             {
                 online = true;
+                await SubirAutomaticos();
                 Poll();
                 return;
             }
@@ -88,7 +89,18 @@ sealed class Bandeja
         // sem servidor a janela funciona (chama o Runner direto); só a tela web e a 2ª instância ficam sem
         online = true;
         Notificacao.Mostrar("Tela web fora do ar", foraDoAr + ". A janela funciona; mude a porta em Ajustes.", "erro");
+        await SubirAutomaticos();
         Poll();
+    }
+
+    async Task SubirAutomaticos()
+    {
+        try { await runner.IniciarAutomaticos(); }
+        catch (Exception ex)
+        {
+            Registro.Erro(ex);
+            Notificacao.Mostrar("Início automático", "Não consegui iniciar os perfis automáticos: " + ex.Message, "erro");
+        }
     }
 
     public string? ForaDoAr => foraDoAr;
@@ -266,20 +278,25 @@ sealed class Bandeja
         var nome = p.Nome;
         var java = p.Tipo == "java";
         var npm = p.Tipo == "npm";
+        var comando = p.Tipo == "comando";
         var item = new NativeMenuItem(nome + "  —  " + TextoEstado(p)) { Icon = Ponto(EstadoPerfil(p)) };
         var sub = new NativeMenu();
         sub.Items.Add(Item("Iniciar", livre, () => Acao(nome, "start")));
-        if (!npm) sub.Items.Add(Item("Depurar", livre, () => Acao(nome, "debug")));
+        if (!npm && !comando) sub.Items.Add(Item("Depurar", livre, () => Acao(nome, "debug")));
         sub.Items.Add(Item(build ? "Cancelar build" : "Parar", e != null || p.EmUso, () => Acao(nome, "stop")));
         var reiniciavel = (e != null && e.Tipo is not ("build" or "reinicio")) || (e == null && p.EmUso);
         sub.Items.Add(Item("Reiniciar", reiniciavel, () => Acao(nome, "reiniciar")));
         sub.Items.Add(new NativeMenuItemSeparator());
-        sub.Items.Add(Item(build ? "Build (em andamento)" : livre ? "Build" : "Build (pare antes)", livre, () => Acao(nome, "build")));
+        if (!comando)
+            sub.Items.Add(Item(build ? "Build (em andamento)" : livre ? "Build" : "Build (pare antes)", livre, () => Acao(nome, "build")));
         if (!java)
         {
-            if (!npm && p.Pacote == null) sub.Items.Add(Item("Sync (estáticos + classes)", !build, () => Acao(nome, "sync")));
+            if (!npm && !comando && p.Pacote == null) sub.Items.Add(Item("Sync (estáticos + classes)", !build, () => Acao(nome, "sync")));
             var url = p.Url;
-            sub.Items.Add(Item("Abrir no navegador", p.EmUso && url != null, () => Proc.AbrirUrl(url!)));
+            if (!comando || url != null)
+                sub.Items.Add(Item("Abrir no navegador", p.EmUso && url != null, () => Proc.AbrirUrl(url!)));
+            if (comando)
+                sub.Items.Add(Item("Abrir terminal", true, () => Acao(nome, "terminal")));
         }
         item.Menu = sub;
         return item;
