@@ -38,12 +38,12 @@ try {
     $envFile = Join-Path $tmp 'command.env'
     Set-Content -Path $envFile -Value 'PIT_ENV_TEST=from-file' -Encoding UTF8
 
-    $isWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
-    $sameSession = if ($isWindows) { "set PIT_SAME=works`necho %PIT_SAME%" } else { "PIT_SAME=works`necho `"`$PIT_SAME`"" }
-    $envEcho = if ($isWindows) { 'echo %PIT_ENV_TEST%' } else { 'echo "$PIT_ENV_TEST"' }
-    $cwdEcho = if ($isWindows) { 'cd' } else { 'pwd' }
-    $failFast = if ($isWindows) { "echo before`ncmd /d /c exit 7`necho after" } else { "echo before`nfalse`necho after" }
-    $longRun = if ($isWindows) { 'ping 127.0.0.1 -t >nul' } else { 'sleep 60' }
+    $runningOnWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+    $sameSession = if ($runningOnWindows) { "set PIT_SAME=works`necho %PIT_SAME%" } else { "PIT_SAME=works`necho `"`$PIT_SAME`"" }
+    $envEcho = if ($runningOnWindows) { 'echo %PIT_ENV_TEST%' } else { 'echo "$PIT_ENV_TEST"' }
+    $cwdEcho = if ($runningOnWindows) { 'cd' } else { 'pwd' }
+    $failFast = if ($runningOnWindows) { "echo before`ncmd /d /c exit 7`necho after" } else { "echo before`nfalse`necho after" }
+    $longRun = if ($runningOnWindows) { 'ping 127.0.0.1 -t >nul' } else { 'sleep 60' }
 
     $testCfg = [ordered]@{
         projetosDir = $work
