@@ -63,6 +63,38 @@ public static class Proc
     {
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); } catch { }
     }
+
+    /// <summary>Abre um terminal normal na pasta, separado do processo gerenciado pelo Pitstop.</summary>
+    public static void AbrirTerminal(string cwd)
+    {
+        if (!Directory.Exists(cwd)) throw new ErroRunner("pasta não existe: " + cwd);
+        if (So.Windows)
+        {
+            try
+            {
+                var wt = new ProcessStartInfo("wt.exe") { UseShellExecute = false, WorkingDirectory = cwd };
+                wt.ArgumentList.Add("-d");
+                wt.ArgumentList.Add(cwd);
+                Process.Start(wt)?.Dispose();
+                return;
+            }
+            catch { }
+            Process.Start(new ProcessStartInfo("cmd.exe") { UseShellExecute = true, WorkingDirectory = cwd })?.Dispose();
+            return;
+        }
+
+        var terminal = Environment.GetEnvironmentVariable("TERMINAL");
+        foreach (var exe in new[] { terminal, "x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal" }.Where(x => !string.IsNullOrWhiteSpace(x)))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(exe!) { UseShellExecute = false, WorkingDirectory = cwd })?.Dispose();
+                return;
+            }
+            catch { }
+        }
+        throw new ErroRunner("nenhum terminal gráfico conhecido foi encontrado");
+    }
 }
 
 /// <summary>

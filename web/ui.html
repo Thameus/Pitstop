@@ -119,7 +119,7 @@ h1{margin:0;font-size:30px;font-weight:600;letter-spacing:-.02em;overflow-wrap:a
 .aba{height:48px;padding:0;margin-bottom:-1px;border:0;border-bottom:2px solid transparent;background:transparent;font-size:14px;font-weight:500;color:var(--mut);cursor:pointer}
 .aba[aria-selected="true"]{color:var(--fg);font-weight:600;border-bottom-color:var(--acc)}
 /* data-tipo="tomcat java": o elemento só aparece nos tipos listados */
-body[data-tipo=tomcat] [data-tipo]:not([data-tipo~=tomcat]),body[data-tipo=java] [data-tipo]:not([data-tipo~=java]),body[data-tipo=npm] [data-tipo]:not([data-tipo~=npm]),body[data-tipo=war] [data-tipo]:not([data-tipo~=war]),body[data-tipo=zip] [data-tipo]:not([data-tipo~=zip]){display:none!important}
+body[data-tipo=tomcat] [data-tipo]:not([data-tipo~=tomcat]),body[data-tipo=java] [data-tipo]:not([data-tipo~=java]),body[data-tipo=npm] [data-tipo]:not([data-tipo~=npm]),body[data-tipo=war] [data-tipo]:not([data-tipo~=war]),body[data-tipo=zip] [data-tipo]:not([data-tipo~=zip]),body[data-tipo=comando] [data-tipo]:not([data-tipo~=comando]){display:none!important}
 
 /* ---------------------------------------------------------------- painéis */
 .painel{flex:1;min-height:0;padding:24px 40px 32px;overflow:auto}
@@ -137,6 +137,7 @@ h2 small{font-weight:400;color:var(--mut)}
 .inp:focus{outline:0;border-color:var(--acc);box-shadow:0 0 0 3px var(--anel)}
 .inp::placeholder{color:var(--off)}
 .inp.num{font-size:14px}
+textarea.inp{height:auto;min-height:96px;padding:10px 12px;resize:vertical;line-height:1.5}
 .chk{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--fg);cursor:pointer}
 input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--acc);cursor:pointer}
 
@@ -233,6 +234,7 @@ body.semPerfis .corpo{display:none}
         <button role="menuitem" class="tipo" data-novo="war"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/><path d="M8 6l8 4"/></svg></span><span class="txt"><b>Tomcat (war)</b><span>.war pronto de um release</span></span></button>
         <button role="menuitem" class="tipo" data-novo="zip"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M11 3v2h2v2h-2v2h2v2h-2"/><rect x="10" y="13" width="3" height="4" rx="1"/></svg></span><span class="txt"><b>Pacote Java</b><span>.zip ou .jar pronto, java -jar</span></span></button>
         <button role="menuitem" class="tipo" data-novo="npm"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7.5 9.5l3 2.5-3 2.5M13 15h3.5"/></svg></span><span class="txt"><b>npm</b><span>script do package.json</span></span></button>
+        <button role="menuitem" class="tipo" data-novo="comando"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span><span class="txt"><b>Comando</b><span>comando ou processo local genérico</span></span></button>
       </div>
     </div>
     <nav id="perfis" aria-labelledby="rotPerfis"></nav>
@@ -263,9 +265,10 @@ body.semPerfis .corpo{display:none}
           <button class="btn pri" data-a="stop"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span id="txtStop">Parar</span></button>
           <button class="btn" data-a="reiniciar" title="Para e sobe de novo no mesmo modo (debug continua debug)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/></svg>Reiniciar</button>
           <span class="vsep" aria-hidden="true"></span>
-          <button class="btn" data-a="build" title="Tomcat: comando de build dos artefatos. App Java: regera o classpath e compila a cadeia inteira. npm: comando de build do projeto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>Build</button>
+          <button class="btn" data-a="build" data-tipo="tomcat java npm war zip" title="Tomcat: comando de build dos artefatos. App Java: regera o classpath e compila a cadeia inteira. npm: comando de build do projeto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>Build</button>
           <button class="btn" data-a="sync" data-tipo="tomcat" title="Copia estáticos (JSP/JS/CSS) e target/classes para a pasta explodida"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9"/><path d="M18.5 3v4.5H14M5.5 21v-4.5H10"/></svg>Sync</button>
-          <button class="btn ico" data-a="abrir" data-tipo="tomcat npm war" aria-label="Abrir no navegador" title="Abrir no navegador"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+          <button class="btn ico" data-a="abrir" data-tipo="tomcat npm war comando" aria-label="Abrir no navegador" title="Abrir no navegador"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+          <button class="btn ico" data-a="terminal" data-tipo="comando" aria-label="Abrir terminal" title="Abrir terminal na pasta do perfil"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></button>
           <div class="mais">
             <button class="btn ico fantasma" id="maisBtn" aria-label="Mais ações" aria-haspopup="menu" aria-expanded="false" aria-controls="maisMenu"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
             <div class="menu" id="maisMenu" role="menu" hidden>
@@ -287,6 +290,7 @@ body.semPerfis .corpo{display:none}
         <button class="aba" role="tab" id="t-app" data-aba="app" data-tipo="java" aria-controls="p-app">Aplicação</button>
         <button class="aba" role="tab" id="t-zip" data-aba="zip" data-tipo="zip" aria-controls="p-zip">Pacote</button>
         <button class="aba" role="tab" id="t-npm" data-aba="npm" data-tipo="npm" aria-controls="p-npm">Projeto</button>
+        <button class="aba" role="tab" id="t-comando" data-aba="comando" data-tipo="comando" aria-controls="p-comando">Comando</button>
       </div>
     </header>
 
@@ -437,11 +441,34 @@ body.semPerfis .corpo{display:none}
         <label class="campo">Variáveis de ambiente (CHAVE=valor; separar por ;)<input class="inp" id="n_env" placeholder="ex.: NODE_OPTIONS=--max-old-space-size=4096"></label>
       </div>
     </section>
+
+    <section class="painel" id="p-comando" role="tabpanel" aria-labelledby="t-comando" data-tipo="comando" hidden>
+      <div class="bloco">
+        <h2>Comando <small>· mesma sessão de shell, em sequência, para no primeiro erro</small></h2>
+        <label class="campo">Comando(s)<textarea class="inp" id="c_comando" rows="7" placeholder="um comando por linha"></textarea></label>
+        <label class="campo">Pasta de execução<input class="inp" id="c_pasta" placeholder="vazio = pasta de projetos de Ajustes; se não houver, HOME"></label>
+      </div>
+      <div class="bloco">
+        <h2>Opções avançadas</h2>
+        <div class="grade">
+          <label class="campo">Shell<input class="inp" id="c_shell" placeholder="auto | cmd | powershell | sh | bash | custom"></label>
+          <label class="campo">Interpretador personalizado<input class="inp" id="c_shellPersonalizado" placeholder="usado quando shell = custom"></label>
+          <label class="campo">Arquivo .env<input class="inp" id="c_envArquivo"></label>
+          <label class="campo">Porta opcional<input class="inp num" id="c_porta" type="number" min="1" max="65535" placeholder="vazio = não observar porta"></label>
+          <label class="campo">URL opcional<input class="inp" id="c_url" placeholder="http:// ou https://"></label>
+          <label class="campo">Pronto quando o log contiver<input class="inp" id="c_prontoLog" placeholder="vazio = pronto ao iniciar ou pela porta"></label>
+          <label class="campo">Tempo limite em segundos<input class="inp num" id="c_timeoutExecucaoSeg" type="number" min="1" placeholder="vazio = sem limite"></label>
+        </div>
+        <label class="campo">Variáveis de ambiente extras<textarea class="inp" id="c_env" rows="4" placeholder="CHAVE=valor; uma por linha ou separadas por ;"></textarea></label>
+        <label class="chk"><input type="checkbox" id="c_abrirNavegadorPronto">Abrir a URL quando o processo ficar pronto</label>
+        <label class="chk"><input type="checkbox" id="c_autoIniciar">Iniciar automaticamente quando o Pitstop abrir</label>
+      </div>
+    </section>
   </main>
   <section id="vazio" hidden>
     <h1>Crie seu primeiro perfil</h1>
     <p>Um perfil é uma coisa que o Pitstop sobe e para: um Tomcat com os wars dos seus projetos, uma aplicação Java com main,
-      um pacote pronto ou um script npm. Use o <b>+</b> ao lado de PERFIS. Caminhos padrão (JDK, Tomcat, Maven, projetos)
+      um pacote pronto, um script npm ou um comando local. Use o <b>+</b> ao lado de PERFIS. Caminhos padrão (JDK, Tomcat, Maven, projetos)
       ficam em <button class="btn link" id="vazioAjustes" type="button">Ajustes</button>.</p>
   </section>
 </div>
@@ -549,9 +576,10 @@ const campos = ['tomcatHome', 'javaHome', 'mavenHome', 'porta', 'portaDebug', 'p
 const camposJava = ['mainClass', 'modulo', 'trabalho', 'javaHome', 'javaHomeBuild', 'mavenHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog'];
 const camposNpm = ['pasta', 'script', 'args', 'porta', 'url', 'prontoLog', 'nodeHome', 'build', 'env'];
 const camposZip = ['pacote', 'jar', 'trabalho', 'conf', 'confDestino', 'javaHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog'];
+const camposComando = ['comando', 'pasta', 'shell', 'shellPersonalizado', 'envArquivo', 'porta', 'url', 'prontoLog', 'timeoutExecucaoSeg', 'env'];
 // perfil "war": Servidor igual ao Tomcat, sem a pasta de projetos (os wars vêm prontos)
 const camposWar = campos.filter(c => c !== 'projetosDir');
-const TIPOS = { tomcat: 'Tomcat', java: 'app Java', npm: 'npm', war: 'Tomcat · war pronto', zip: 'pacote Java' };
+const TIPOS = { tomcat: 'Tomcat', java: 'app Java', npm: 'npm', war: 'Tomcat · war pronto', zip: 'pacote Java', comando: 'Comando' };
 const tipoDe = p => p && TIPOS[p.tipo] ? p.tipo : 'tomcat';
 function preencher() {
   const p = cfg.perfis[atual];
@@ -582,6 +610,12 @@ function preencher() {
     $('#j_mavenHome').placeholder = 'vazio = ' + (cfg.mavenHome || 'mvn do PATH');
     $('#j_trabalho').placeholder = 'vazio = ' + (p.modulo || 'pasta do módulo');
     carregarMains();
+  } else if (tipoDe(p) === 'comando') {
+    camposComando.forEach(c => $('#c_' + c).value = p[c] == null ? '' : p[c]);
+    $('#c_shell').value = p.shell || 'auto';
+    $('#c_pasta').placeholder = 'vazio = ' + (cfg.projetosDir || 'HOME do usuário');
+    $('#c_abrirNavegadorPronto').checked = p.abrirNavegadorPronto === true;
+    $('#c_autoIniciar').checked = p.autoIniciar === true;
   } else {
     campos.forEach(c => $('#' + c).value = p[c] == null ? '' : p[c]);
     $('#tomcatHome').placeholder = 'vazio = ' + (cfg.tomcatHome || 'defina aqui ou em Ajustes');
@@ -603,7 +637,7 @@ function preencher() {
 function escolherAba(id) {
   const tipo = tipoDe(cfg.perfis[atual]);
   const validas = { java: ['log', 'app'], npm: ['log', 'npm'], tomcat: ['log', 'artefatos', 'servidor'],
-                    war: ['log', 'wars', 'servidor'], zip: ['log', 'zip'] }[tipo];
+                    war: ['log', 'wars', 'servidor'], zip: ['log', 'zip'], comando: ['log', 'comando'] }[tipo];
   if (!validas.includes(id)) id = 'log';
   $$('.aba').forEach(b => b.setAttribute('aria-selected', String(b.dataset.aba === id)));
   $$('.painel').forEach(p => p.hidden = p.id !== 'p-' + id);
@@ -624,7 +658,7 @@ function estadoDe(st) {
       ? { k: 'debug', txt: 'debug', pill: 'Debug · porta ' + st.portaDebug, rodando: true }
       : { k: 'noar', txt: 'no ar', pill: 'No ar · subiu em ' + dur(e.pronto - e.desde), rodando: true };
   }
-  if (st.emUso) return { k: 'noar', txt: 'fora', pill: st.tipo === 'java' ? 'Rodando fora desta tela' : 'Porta ' + st.porta + ' em uso fora desta tela', rodando: true, fora: true };
+  if (st.emUso) return { k: 'noar', txt: 'fora', pill: st.tipo === 'java' || st.tipo === 'comando' ? 'Rodando fora desta tela' : 'Porta ' + st.porta + ' em uso fora desta tela', rodando: true, fora: true };
   const u = st.ultimo;
   if (u && u.tipo !== 'build' && u.parado === false) return { k: 'erro', txt: 'caiu', pill: 'Caiu · código ' + u.codigo };
   return { k: 'parado', txt: 'parado', pill: u && u.tipo === 'build' && !u.ok && !u.cancelado ? 'Parado · último build falhou' : 'Parado' };
@@ -642,6 +676,7 @@ function pintarPerfis() {
     const t = tipoDe(p);
     const meta = t === 'java' ? 'app Java' : t === 'npm' ? 'npm · :' + (p.porta || 4200)
       : t === 'zip' ? 'pacote · ' + (versaoDe(p.pacote) || 'Java')
+      : t === 'comando' ? 'comando' + (p.porta ? ' · :' + p.porta : '')
       : (t === 'war' ? 'war' : 'Tomcat') + ' · :' + (p.porta || 8080);
     b.innerHTML = `<i class="dot k-${est.k}"></i><span class="txt"><span class="nm">${esc(n)}</span><span class="mt">${esc(meta)}</span></span><span class="est">${esc(est.txt)}</span>`;
     b.onclick = () => selecionar(n);
@@ -668,6 +703,7 @@ function pintarCabecalho() {
   $('#alvo').textContent = java ? (p.mainClass || 'sem classe main')
     : tipo === 'zip' ? (p.pacote ? base(p.pacote) + (versaoDe(p.pacote) ? ' · ' + versaoDe(p.pacote) : '') : 'sem pacote')
     : tipo === 'npm' ? 'npm run ' + (p.script || 'start') + (p.pasta ? ' · ' + base(p.pasta) : '')
+    : tipo === 'comando' ? ((p.comando || '').replace(/\r/g, '').split('\n').find(x => x.trim()) || 'sem comando').trim()
     : (p.url || (st && st.url) || '');
   // ações conforme o estado (design visual do Pitstop § Componentes): uma primária por vez
   const livre = !est.rodando && !est.build;
@@ -680,7 +716,9 @@ function pintarCabecalho() {
     $('[data-a=build]').disabled = !livre || (tipo === 'npm' && !p.build);
     $('[data-a=sync]').disabled = !!est.build;
     $('[data-a=abrir]').disabled = !est.rodando;
+    $('[data-a=terminal]').disabled = false;
   }
+  $('[data-a=abrir]').classList.toggle('oculto', tipo === 'comando' && !p.url);
   $('#ren').disabled = !livre;
   $('#ren').title = livre ? '' : 'Pare o perfil antes de renomear';
   $('[data-a=build]').title = est.build ? 'Build em andamento'
@@ -691,6 +729,8 @@ function pintarCabecalho() {
     : 'Build dos artefatos ativos';
   const u = st && st.ultimo && st.ultimo.tipo === 'build' ? st.ultimo : null;
   const ub = u ? (u.ok ? 'ok · ' + dur(u.duracao) : u.cancelado ? 'cancelado' : 'falhou') : '—';
+  const uc = st && st.ultimo && st.ultimo.tipo === 'comando' ? st.ultimo : null;
+  const ultimoComando = !uc ? '—' : uc.ok ? 'ok · ' + dur(uc.duracao) : (uc.motivo || ('código ' + uc.codigo));
   const wars = (p.artefatos || []).filter(a => a.ativo !== false && a.war);
   const stats = java
     ? [['Debug', p.portaDebug || 5006], ['Java', base(p.javaHome) || 'JAVA_HOME'], ['Módulo', base(p.modulo) || '—'], ['Última compilação', ub]]
@@ -700,6 +740,8 @@ function pintarCabecalho() {
     ? [['HTTP', p.porta || 8080], ['Debug', p.portaDebug || 5005], ['Versão', [...new Set(wars.map(a => versaoDe(a.war)))].join(', ') || '—'], ['Última extração', ub]]
     : tipo === 'npm'
     ? [['HTTP', p.porta || 4200], ['Script', p.script || 'start'], ['Node', base(p.nodeHome) || 'PATH'], ['Último build', ub]]
+    : tipo === 'comando'
+    ? [['Pasta', base(st && st.pasta) || base(p.pasta || cfg.projetosDir) || 'HOME'], ['Shell', p.shell || 'auto'], ['Porta', p.porta || '—'], ['Última execução', ultimoComando]]
     : [['HTTP', p.porta || 8080], ['Shutdown', p.portaShutdown || (p.porta || 8080) - 75], ['Debug', p.portaDebug || 5005], ['Último build', ub]];
   $('#stats').innerHTML = stats.map(([r, v]) => `<div class="stat"><span>${esc(r)}</span><b title="${esc(v)}">${esc(v)}</b></div>`).join('');
 }
@@ -828,6 +870,16 @@ function coletar() {
     j.compilarAntes = $('#j_compilarAntes').checked;
     return j;
   }
+  if (tipoDe(cfg.perfis[atual]) === 'comando') {
+    const c = { tipo: 'comando' };
+    camposComando.forEach(k => {
+      const el = $('#c_' + k), v = el.value.trim();
+      if (v !== '') c[k] = el.type === 'number' ? Number(v) : v;
+    });
+    c.abrirNavegadorPronto = $('#c_abrirNavegadorPronto').checked;
+    c.autoIniciar = $('#c_autoIniciar').checked;
+    return c;
+  }
   const p = {};
   campos.forEach(c => {
     const v = $('#' + c).value.trim();
@@ -852,6 +904,13 @@ function validar(p) {
   }
   if (p.tipo === 'zip') {
     if (!p.pacote) throw new Error('informe o pacote (.zip ou .jar)');
+    return;
+  }
+  if (p.tipo === 'comando') {
+    if (!p.comando || !p.comando.trim()) throw new Error('informe o comando');
+    if (p.porta != null && (p.porta < 1 || p.porta > 65535)) throw new Error('porta precisa estar entre 1 e 65535');
+    if (p.timeoutExecucaoSeg != null && p.timeoutExecucaoSeg <= 0) throw new Error('tempo limite precisa ser maior que zero');
+    if (p.url && !/^https?:\/\//i.test(p.url)) throw new Error('URL precisa ser http:// ou https://');
     return;
   }
   const portas = ['porta', 'portaDebug', 'portaJmx', 'portaShutdown', 'portaAjp'].filter(k => p[k]).map(k => p[k]);
@@ -979,7 +1038,7 @@ $$('[data-a]').forEach(b => b.onclick = async () => {
   if (ocupado) return;
   ocupado = true; b.disabled = true;
   const a = b.dataset.a;
-  const nomes = { start: 'iniciar', debug: 'depurar', stop: 'parar', reiniciar: 'reiniciar', build: 'build', sync: 'sync', abrir: 'abrir' };
+  const nomes = { start: 'iniciar', debug: 'depurar', stop: 'parar', reiniciar: 'reiniciar', build: 'build', sync: 'sync', abrir: 'abrir', terminal: 'abrir terminal' };
   msg(nomes[a] + '…', 'busy');
   try {
     if (a !== 'abrir' && a !== 'stop') await salvar();
@@ -990,7 +1049,9 @@ $$('[data-a]').forEach(b => b.onclick = async () => {
       : (a === 'start' || a === 'debug') && pacote ? 'subindo — extrai o pacote se preciso (acompanhe no log)'
       : a === 'reiniciar' ? 'reiniciando — para e sobe no mesmo modo (acompanhe no log)'
       : (a === 'start' || a === 'debug') && tipoDe(cfg.perfis[atual]) === 'java' ? 'pedido: compila o que mudou e sobe — acompanhe no log'
-      : a === 'start' && tipoDe(cfg.perfis[atual]) === 'npm' ? 'npm subindo — fica no ar quando compilar (acompanhe no log)' : nomes[a] + ': ok', 'on');
+      : a === 'start' && tipoDe(cfg.perfis[atual]) === 'npm' ? 'npm subindo — fica no ar quando compilar (acompanhe no log)'
+      : a === 'start' && tipoDe(cfg.perfis[atual]) === 'comando' ? 'comando iniciado — acompanhe no log'
+      : nomes[a] + ': ok', 'on');
     if (a === 'build' || a === 'start' || a === 'debug' || a === 'reiniciar') escolherAba('log');
   } catch (e) { msg(e.message, 'err'); }
   ocupado = false; b.disabled = false;
@@ -1025,6 +1086,7 @@ const NOVOS = {
   npm: () => ({ tipo: 'npm', script: 'start', porta: portaLivre(4200), build: 'npm run build' }),
   war: () => ({ tipo: 'war', porta: portaLivre(8080), portaDebug: portaLivre(5005), artefatos: [] }),
   zip: () => ({ tipo: 'zip', portaDebug: portaLivre(5006) }),
+  comando: () => ({ tipo: 'comando', shell: 'auto' }),
 };
 function fecharNovo(foco) {
   if ($('#novoMenu').hidden) return;
@@ -1251,7 +1313,7 @@ const validarNome = n => n.length < 1 || n.length > 64 || n.startsWith('.') || n
   ? 'Use até 64 letras/números e - . _; não comece/termine com ponto'
   : cfg.perfis[n] ? 'Já existe um perfil ' + n : '';
 const TITULO_NOVO = { tomcat: 'Novo perfil Tomcat', java: 'Nova aplicação Java', npm: 'Novo perfil npm',
-                      war: 'Novo Tomcat com war pronto', zip: 'Novo pacote Java' };
+                      war: 'Novo Tomcat com war pronto', zip: 'Novo pacote Java', comando: 'Novo perfil Comando' };
 
 $('#dup').onclick = () => {
   fecharMais();
@@ -1261,8 +1323,32 @@ $('#dup').onclick = () => {
   criar(c, 'Duplicar ' + atual, atual + '-copia');
 };
 async function criar(p, titulo, sugestao = '') {
+  const tipo = tipoDe(p);
+
+  if (tipo === 'comando' && !p.comando) {
+    const n = await dialogo({
+      titulo: titulo || TITULO_NOVO[tipo], icone: icoTipo(tipo),
+      texto: 'O nome aparece na lateral, na bandeja e no pit up <nome>.',
+      rotulo: 'Nome do perfil', valor: sugestao, botao: 'Continuar', validar: validarNome,
+    });
+    if (!n) return;
+    const comando = await dialogo({
+      titulo: 'Comando inicial', icone: icoTipo('comando'),
+      texto: 'Informe o primeiro comando. Depois você pode usar várias linhas e configurar as opções avançadas.',
+      rotulo: 'Comando', valor: '', botao: 'Criar perfil',
+    });
+    if (!comando) return;
+    p.comando = comando;
+    cfg.perfis[n] = p;
+    try { cfg._versao = (await api('PUT', '/api/cfg', cfg)).versao; }
+    catch (e) { delete cfg.perfis[n]; msg(e.message, 'err'); return; }
+    lsSet('pit.perfil', n);
+    carregar(n);
+    return;
+  }
+
   const n = await dialogo({
-    titulo: titulo || TITULO_NOVO[tipoDe(p)], icone: icoTipo(tipoDe(p)),
+    titulo: titulo || TITULO_NOVO[tipo], icone: icoTipo(tipo),
     texto: 'O nome aparece na lateral, na bandeja e no pit up <nome>.',
     rotulo: 'Nome do perfil', valor: sugestao, botao: 'Criar perfil', validar: validarNome,
     acao: async n => {

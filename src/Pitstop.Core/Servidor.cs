@@ -16,7 +16,7 @@ namespace Pitstop;
 /// </summary>
 public sealed class Servidor(Runner runner, int porta)
 {
-    static readonly Regex RotaPerfil = new(@"^/api/p/([\w.-]+)/(log|start|debug|stop|reiniciar|build|sync|preparar|abrir|limpar)$");
+    static readonly Regex RotaPerfil = new(@"^/api/p/([\w.-]+)/(log|start|debug|stop|reiniciar|build|sync|preparar|abrir|terminal|limpar)$");
     static readonly Regex RotaRenomear = new(@"^/api/p/([\w.-]+)/renomear$");
     static readonly Dictionary<string, (string Arquivo, string Tipo)> Icones = new()
     {

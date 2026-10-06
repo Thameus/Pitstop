@@ -47,7 +47,7 @@ sealed partial class Janela : Window
     readonly TextBlock pillTxt = Ui.Txt("parado", 13);
     readonly TextBlock tipoTxt = Ui.Txt("", 13, "Mut");
     readonly TextBlock alvoTxt = Ui.Txt("", 12, "Mut", mono: true);
-    readonly Button salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, buildBtn, syncBtn, abrirBtn, maisBtn;
+    readonly Button salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, buildBtn, syncBtn, abrirBtn, terminalBtn, maisBtn;
     readonly TextBlock pararTxt = new() { Text = "Parar", VerticalAlignment = VerticalAlignment.Center };
     readonly UniformGrid stats = new() { Columns = 4, Rows = 1 };
     readonly StackPanel abas = new() { Orientation = Orientation.Horizontal };
@@ -101,10 +101,11 @@ sealed partial class Janela : Window
         buildBtn = Ui.Btn("Build", "", "build");
         syncBtn = Ui.Btn("Sync", "", "sync").Dica("Copia estáticos (JSP/JS/CSS) e target/classes para a pasta explodida");
         abrirBtn = Ui.BtnIco("abrir", "Abrir no navegador");
+        terminalBtn = Ui.BtnIco("terminal", "Abrir terminal aqui");
         maisBtn = Ui.BtnIco("mais", "Mais ações", "fantasma", 18);
         maisBtn.Click += (_, _) => MenuMais();
         foreach (var (b, a) in new[] { (iniciarBtn, "start"), (depurarBtn, "debug"), (pararBtn, "stop"), (reiniciarBtn, "reiniciar"),
-                                       (buildBtn, "build"), (syncBtn, "sync"), (abrirBtn, "abrir") })
+                                       (buildBtn, "build"), (syncBtn, "sync"), (abrirBtn, "abrir"), (terminalBtn, "terminal") })
             b.Click += (_, _) => Executar(a);
 
         Content = Montar();
@@ -226,7 +227,7 @@ sealed partial class Janela : Window
 
         var acoes = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         var sep = new Border { Width = 1, Height = 24, Margin = new Thickness(4, 8, 12, 8), VerticalAlignment = VerticalAlignment.Top }.Res(Border.BackgroundProperty, "Line");
-        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, sep, buildBtn, syncBtn, abrirBtn, maisBtn })
+        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, sep, buildBtn, syncBtn, abrirBtn, terminalBtn, maisBtn })
         {
             if (b != sep) b.Margin = new Thickness(0, 0, 8, 8);
             acoes.Children.Add(b);
@@ -306,6 +307,7 @@ sealed partial class Janela : Window
         ["java"] = ["log", "app"],
         ["zip"] = ["log", "zip"],
         ["npm"] = ["log", "npm"],
+        ["comando"] = ["log", "comando"],
     };
 
     /// <summary>Abas do tipo do perfil atual, na ordem; a escolhida fica lembrada.</summary>

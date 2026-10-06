@@ -4,7 +4,19 @@ rem Menu Iniciar. Para gerar os pacotes de distribuicao (.tar.xz Windows e Linux
 rem Precisa do .NET 10 SDK: winget install Microsoft.DotNet.SDK.10
 setlocal
 cd /d "%~dp0"
-where dotnet >nul 2>nul || (echo dotnet nao encontrado no PATH. Instale o .NET 10 SDK. & pause & exit /b 1)
+
+set "DOTNET=dotnet"
+where dotnet >nul 2>nul
+if errorlevel 1 (
+  if exist "%ProgramFiles%\dotnet\dotnet.exe" (
+    set "DOTNET=%ProgramFiles%\dotnet\dotnet.exe"
+  ) else (
+    echo dotnet nao encontrado no PATH nem em "%ProgramFiles%\dotnet\dotnet.exe".
+    echo Instale o .NET 10 SDK.
+    pause
+    exit /b 1
+  )
+)
 
 rem o Windows trava o exe em uso: o Pitstop precisa estar fechado (menu da bandeja - Parar e Sair)
 tasklist /FI "IMAGENAME eq Pitstop.exe" /NH | find /I "Pitstop.exe" >nul && (
@@ -14,8 +26,8 @@ tasklist /FI "IMAGENAME eq Pitstop.exe" /NH | find /I "Pitstop.exe" >nul && (
 )
 
 if exist app rmdir /s /q app
-dotnet publish src\Pitstop.App\Pitstop.App.csproj -c Release -o app --nologo || goto erro
-dotnet publish src\Pitstop.Cli\Pitstop.Cli.csproj -c Release -o app --nologo || goto erro
+"%DOTNET%" publish src\Pitstop.App\Pitstop.App.csproj -c Release -o app --nologo || goto erro
+"%DOTNET%" publish src\Pitstop.Cli\Pitstop.Cli.csproj -c Release -o app --nologo || goto erro
 
 rem atalhos: duplo clique abre o Pitstop (janela + icone na bandeja)
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^

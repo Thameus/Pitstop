@@ -17,11 +17,13 @@ sealed partial class Janela
         ("war", "war", "Tomcat (war)", ".war pronto de um release, sem compilar", "Novo Tomcat com war pronto"),
         ("zip", "zip", "Pacote Java", ".zip ou .jar pronto, java -jar", "Novo pacote Java"),
         ("npm", "npm", "npm", "script do package.json (dev server)", "Novo perfil npm"),
+        ("comando", "terminal", "Comando", "comando ou processo local genérico", "Novo perfil Comando"),
     ];
 
     static readonly Dictionary<string, string> NomeTipo = new()
     {
         ["tomcat"] = "Tomcat", ["java"] = "app Java", ["npm"] = "npm", ["war"] = "Tomcat · war pronto", ["zip"] = "pacote Java",
+        ["comando"] = "Comando",
     };
 
     JsonObject Perfis => cfg["perfis"] as JsonObject ?? throw new ErroRunner("config inválida: falta \"perfis\"");
@@ -137,6 +139,7 @@ sealed partial class Janela
             {
                 "java" => "app Java",
                 "npm" => "npm · :" + (JsonAux.Num(p, "porta") ?? 4200),
+                "comando" => "comando" + (JsonAux.Num(p, "porta") is int cp ? " · :" + cp : ""),
                 "zip" => "pacote · " + (VersaoDe(JsonAux.Txt(p, "pacote")) is { Length: > 0 } v ? v : "Java"),
                 _ => (t == "war" ? "war" : "Tomcat") + " · :" + (JsonAux.Num(p, "porta") ?? 8080),
             };
@@ -164,17 +167,20 @@ sealed partial class Janela
             "java" => JsonAux.Txt(p, "mainClass") ?? "sem classe main",
             "zip" => pacote != null ? Base(pacote) + (VersaoDe(pacote) is { Length: > 0 } v ? " · " + v : "") : "sem pacote",
             "npm" => "npm run " + (JsonAux.Txt(p, "script") ?? "start") + (JsonAux.Txt(p, "pasta") is { } pa ? " · " + Base(pa) : ""),
+            "comando" => (JsonAux.Txt(p, "comando") ?? "").Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "sem comando",
             _ => JsonAux.Txt(p, "url") ?? st?.Url ?? "",
         };
 
         // uma primária por estado (design visual do Pitstop § Componentes)
         var livre = !est.Rodando && !est.Build;
         Ui.Mostrar(iniciarBtn, livre);
-        Ui.Mostrar(depurarBtn, livre && tipo != "npm");
+        Ui.Mostrar(depurarBtn, livre && tipo is not ("npm" or "comando"));
         Ui.Mostrar(pararBtn, !livre);
         Ui.Mostrar(reiniciarBtn, est.Rodando && !est.Reinicio);
+        Ui.Mostrar(buildBtn, tipo != "comando");
         Ui.Mostrar(syncBtn, tipo == "tomcat");
-        Ui.Mostrar(abrirBtn, tipo is "tomcat" or "npm" or "war");
+        Ui.Mostrar(abrirBtn, (tipo is "tomcat" or "npm" or "war") || (tipo == "comando" && JsonAux.Txt(p, "url") != null));
+        Ui.Mostrar(terminalBtn, tipo == "comando");
         pararTxt.Text = est.Build ? "Cancelar build" : "Parar";
         var buildNpm = JsonAux.Txt(p, "build");
         if (!ocupado)
@@ -201,10 +207,17 @@ sealed partial class Janela
             "zip" => [("Debug", Num("portaDebug", 5006)), ("Java", java), ("Versão", VersaoDe(pacote) is { Length: > 0 } vz ? vz : "—"), ("Última extração", ultimo)],
             "war" => [("HTTP", Num("porta", 8080)), ("Debug", Num("portaDebug", 5005)), ("Versão", VersoesWar(p)), ("Última extração", ultimo)],
             "npm" => [("HTTP", Num("porta", 4200)), ("Script", JsonAux.Txt(p, "script") ?? "start"), ("Node", JsonAux.Txt(p, "nodeHome") is { } nh ? Base(nh) : "PATH"), ("Último build", ultimo)],
+            "comando" => [("Pasta", Base(st?.Pasta) is { Length: > 0 } pcwd ? pcwd : "HOME"), ("Shell", JsonAux.Txt(p, "shell") ?? "auto"), ("Porta", JsonAux.Num(p, "porta")?.ToString() ?? "—"), ("Última execução", UltimoComando(st?.Ultimo))],
             _ => [("HTTP", porta.ToString()), ("Shutdown", Num("portaShutdown", porta - 75)), ("Debug", Num("portaDebug", 5005)), ("Último build", ultimo)],
         };
         PintarStats(linhas);
     }
+
+    static string UltimoComando(Ultimo? u) => u == null ? "—"
+        : u.Motivo == "timeout" ? "timeout"
+        : u.Motivo == "usuario" ? "interrompida"
+        : u.Ok ? "ok · " + Dur(u.Duracao)
+        : "falhou" + (u.Codigo is int c ? " · " + c : "");
 
     static string VersoesWar(JsonObject p)
     {
@@ -243,7 +256,7 @@ sealed partial class Janela
     static readonly Dictionary<string, string> NomeAcao = new()
     {
         ["start"] = "iniciar", ["debug"] = "depurar", ["stop"] = "parar", ["reiniciar"] = "reiniciar",
-        ["build"] = "build", ["sync"] = "sync", ["abrir"] = "abrir",
+        ["build"] = "build", ["sync"] = "sync", ["abrir"] = "abrir", ["terminal"] = "abrir terminal",
     };
 
     async void Executar(string a)
@@ -337,6 +350,7 @@ sealed partial class Janela
     {
         "java" => new() { ["tipo"] = "java", ["portaDebug"] = PortaLivre("portaDebug", 5006), ["compilarAntes"] = true },
         "npm" => new() { ["tipo"] = "npm", ["script"] = "start", ["porta"] = PortaLivre("porta", 4200), ["build"] = "npm run build" },
+        "comando" => new() { ["tipo"] = "comando", ["shell"] = "auto" },
         "war" => new() { ["tipo"] = "war", ["porta"] = PortaLivre("porta", 8080), ["portaDebug"] = PortaLivre("portaDebug", 5005), ["artefatos"] = new JsonArray() },
         "zip" => new() { ["tipo"] = "zip", ["portaDebug"] = PortaLivre("portaDebug", 5006) },
         _ => new() { ["porta"] = PortaLivre("porta", 8080), ["portaDebug"] = PortaLivre("portaDebug", 5005), ["projetos"] = new JsonArray(), ["artefatos"] = new JsonArray() },
@@ -382,11 +396,16 @@ sealed partial class Janela
             new("pasta", "Pasta do projeto", "", "pasta com o package.json", null, Pasta: true, Obrigatorio: true),
             new("nodeHome", "Node.js", "", "vazio = node do PATH", "Sem Node? nodejs.org (versão LTS)", Pasta: true),
         ],
+        "comando" =>
+        [
+            new("comando", "Comando inicial", "", "ex.: dotnet run", "Depois você pode usar várias linhas na aba Comando.", Obrigatorio: true),
+            new("pasta", "Pasta de execução", "", Global("projetosDir") is { } d ? "vazio = " + d : "vazio = HOME do usuário", null, Pasta: true),
+        ],
         _ => [],
     };
 
     /// <summary>Confere os caminhos informados; vazio passa (usa o padrão).</summary>
-    static void ValidarCaminhos(IReadOnlyDictionary<string, string> v)
+    static void ValidarCaminhos(string tipo, IReadOnlyDictionary<string, string> v)
     {
         string? V(string k) => v.TryGetValue(k, out var s) && s != "" ? s : null;
         if (V("tomcatHome") is { } t && !File.Exists(Path.Combine(t, "bin", So.Catalina)))
@@ -396,7 +415,11 @@ sealed partial class Janela
         if (V("projetosDir") is { } d && !Directory.Exists(d)) throw new ErroRunner("pasta não existe: " + d);
         if (V("modulo") is { } m && !File.Exists(Path.Combine(m, "pom.xml"))) throw new ErroRunner("sem pom.xml em " + m);
         if (V("pacote") is { } pc && !File.Exists(pc)) throw new ErroRunner("arquivo não existe: " + pc);
-        if (V("pasta") is { } pa && !File.Exists(Path.Combine(pa, "package.json"))) throw new ErroRunner("sem package.json em " + pa);
+        if (V("pasta") is { } pa)
+        {
+            if (tipo == "npm" && !File.Exists(Path.Combine(pa, "package.json"))) throw new ErroRunner("sem package.json em " + pa);
+            if (tipo == "comando" && !Directory.Exists(pa)) throw new ErroRunner("pasta não existe: " + pa);
+        }
         if (V("nodeHome") is { } n && !File.Exists(Path.Combine(n, So.Exe("node"))) && !File.Exists(Path.Combine(n, "bin", So.Exe("node"))))
             throw new ErroRunner("não achei " + So.Exe("node") + " em " + n);
     }
@@ -410,7 +433,7 @@ sealed partial class Janela
             IconeDe(tipo), "Nome do perfil", sugestao, "Criar perfil",
             ValidarNome, (nome, valores) =>
             {
-                ValidarCaminhos(valores);
+                ValidarCaminhos(tipo, valores);
                 foreach (var (k, v) in valores) if (v != "") p[k] = v;
                 // projeto npm: a pasta sugere o nome do script e do perfil não muda; Tomcat: a pasta de projetos fica no perfil
                 Perfis[nome] = p;
@@ -421,7 +444,7 @@ sealed partial class Janela
         if (n == null) return;
         sujo = false;
         Carregar(n);
-        EscolherAba(tipo switch { "tomcat" => "artefatos", "war" => "wars", "java" => "app", "zip" => "zip", "npm" => "npm", _ => "log" });
+        EscolherAba(tipo switch { "tomcat" => "artefatos", "war" => "wars", "java" => "app", "zip" => "zip", "npm" => "npm", "comando" => "comando", _ => "log" });
     }
 
     async Task Renomear()

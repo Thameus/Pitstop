@@ -29,11 +29,11 @@ sealed class CartaoWar
 
 sealed partial class Janela
 {
-    static readonly HashSet<string> Numericos = ["porta", "portaDebug", "portaShutdown", "portaJmx", "portaAjp"];
+    static readonly HashSet<string> Numericos = ["porta", "portaDebug", "portaShutdown", "portaJmx", "portaAjp", "timeoutExecucaoSeg"];
 
-    readonly Dictionary<string, TextBox> fServ = new(), fApp = new(), fNpm = new(), fZip = new();
+    readonly Dictionary<string, TextBox> fServ = new(), fApp = new(), fNpm = new(), fZip = new(), fComando = new();
     TextBox projetosDir = null!;
-    CheckBox compilarAntes = null!, mostrarSemWar = null!;
+    CheckBox compilarAntes = null!, mostrarSemWar = null!, comandoAbrirPronto = null!, comandoAutoIniciar = null!;
     readonly TextBlock mainsInfo = Ui.Txt("", 12, "Mut"), scriptsInfo = Ui.Txt("", 12, "Mut"), versoesZipInfo = Ui.Txt("", 12, "Mut");
     readonly TextBlock npmLinha = Ui.Txt("", 12, "Mut", mono: true), zipInfo = Ui.Txt("", 12, "Mut", mono: true), projInfo = Ui.Txt("", 13, "Mut");
     readonly WrapPanel projsBox = new();
@@ -77,6 +77,7 @@ sealed partial class Janela
         RegistrarAba("app", "Aplicação", PainelApp());
         RegistrarAba("zip", "Pacote", PainelZip());
         RegistrarAba("npm", "Projeto", PainelNpm());
+        RegistrarAba("comando", "Comando", PainelComando());
     }
 
     Control PainelArtefatos()
@@ -232,6 +233,39 @@ sealed partial class Janela
                 Ui.Campo("Variáveis de ambiente (CHAVE=valor; separar por ;)", F(fNpm, "env", "ex.: NODE_OPTIONS=--max-old-space-size=4096"))));
     }
 
+    Control PainelComando()
+    {
+        var comando = F(fComando, "comando", "um comando por linha; para no primeiro erro", 170);
+        comando.AcceptsReturn = true;
+        comando.TextWrapping = TextWrapping.Wrap;
+
+        var env = F(fComando, "env", "CHAVE=valor; uma por linha ou separadas por ;", 90);
+        env.AcceptsReturn = true;
+        env.TextWrapping = TextWrapping.Wrap;
+
+        comandoAbrirPronto = Ui.Chk("Abrir a URL quando o processo ficar pronto");
+        comandoAbrirPronto.IsCheckedChanged += (_, _) => MarcarSujo();
+        comandoAutoIniciar = Ui.Chk("Iniciar automaticamente quando o Pitstop abrir");
+        comandoAutoIniciar.IsCheckedChanged += (_, _) => MarcarSujo();
+
+        return Rolavel(
+            Ui.Bloco("Comando", "executa as linhas em sequência na mesma sessão e para no primeiro erro", null,
+                Ui.Campo("Comando(s)", comando),
+                Ui.Campo("Pasta de execução", Pasta(F(fComando, "pasta", "vazio = pasta de projetos de Ajustes; se não houver, HOME"), "Pasta de execução"))),
+            Ui.Bloco("Opções avançadas", null, null,
+                Ui.Grade(2,
+                    Ui.Campo("Shell", F(fComando, "shell", "auto | cmd | powershell | sh | bash | custom")),
+                    Ui.Campo("Interpretador personalizado (quando shell = custom)", F(fComando, "shellPersonalizado")),
+                    Ui.Campo("Arquivo .env", Ui.ComBotoes(F(fComando, "envArquivo"), Ui.Procurar(fComando["envArquivo"], "Arquivo .env", false))),
+                    Ui.Campo("Porta opcional", F(fComando, "porta", "vazio = não observar porta")),
+                    Ui.Campo("URL opcional", F(fComando, "url", "https:// ou http://")),
+                    Ui.Campo("Pronto quando o log contiver", F(fComando, "prontoLog", "vazio = pronto ao iniciar ou pela porta")),
+                    Ui.Campo("Tempo limite em segundos", F(fComando, "timeoutExecucaoSeg", "vazio = sem limite"))),
+                Ui.Campo("Variáveis de ambiente extras", env),
+                comandoAbrirPronto,
+                comandoAutoIniciar));
+    }
+
     // ---------------------------------------------------------------- preencher (perfis.json -> tela)
 
     static void Encher(Dictionary<string, TextBox> d, JsonObject p)
@@ -278,6 +312,12 @@ sealed partial class Janela
                     fApp["mavenHome"].Watermark = PadraoMaven;
                     fApp["trabalho"].Watermark = "vazio = " + (JsonAux.Txt(p, "modulo") ?? "pasta do módulo");
                     AtualizarMains();
+                    break;
+                case "comando":
+                    Encher(fComando, p);
+                    fComando["pasta"].Watermark = "vazio = " + (JsonAux.Txt(cfg, "projetosDir") ?? "HOME do usuário");
+                    comandoAbrirPronto.IsChecked = p["abrirNavegadorPronto"]?.GetValue<bool>() == true;
+                    comandoAutoIniciar.IsChecked = p["autoIniciar"]?.GetValue<bool>() == true;
                     break;
                 default:
                     Encher(fServ, p);
@@ -363,6 +403,12 @@ sealed partial class Janela
                 Campos(fApp);
                 p["compilarAntes"] = compilarAntes.IsChecked == true;
                 break;
+            case "comando":
+                p["tipo"] = "comando";
+                Campos(fComando);
+                p["abrirNavegadorPronto"] = comandoAbrirPronto.IsChecked == true;
+                p["autoIniciar"] = comandoAutoIniciar.IsChecked == true;
+                break;
             default:
                 Campos(fServ);
                 var dir = (projetosDir.Text ?? "").Trim();
@@ -392,6 +438,11 @@ sealed partial class Janela
                 return;
             case "zip":
                 if (JsonAux.Txt(p, "pacote") == null) throw new ErroRunner("informe o pacote (.zip ou .jar)");
+                return;
+            case "comando":
+                if (JsonAux.Txt(p, "comando") == null) throw new ErroRunner("informe o comando");
+                if (JsonAux.Num(p, "porta") is int cp && cp is < 1 or > 65535) throw new ErroRunner("porta precisa estar entre 1 e 65535");
+                if (JsonAux.Num(p, "timeoutExecucaoSeg") is int ct && ct <= 0) throw new ErroRunner("tempo limite precisa ser maior que zero");
                 return;
         }
         var portas = Numericos.Select(k => JsonAux.Num(p, k)).OfType<int>().ToList();
