@@ -1,6 +1,6 @@
 @echo off
 rem Desenvolvimento: publica o Pitstop em app\ (Pitstop.exe + pit.exe e as .dll) e cria o atalho "Pitstop" nesta pasta e no
-rem Menu Iniciar. Para gerar os pacotes de distribuicao (.tar.xz Windows e Linux): empacotar.ps1.
+rem Menu Iniciar. Para gerar distribuicao: empacotar.ps1 (wrapper de scripts\release\empacotar.ps1).
 rem Precisa do .NET 10 SDK: winget install Microsoft.DotNet.SDK.10
 setlocal
 cd /d "%~dp0"

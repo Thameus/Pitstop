@@ -1,6 +1,6 @@
 #!/bin/sh
 # Desenvolvimento no Linux: publica o Pitstop em app/ (Pitstop + pit). Precisa do .NET 10 SDK.
-# Para gerar os pacotes de distribuição use empacotar.ps1 (Windows) — ele gera o pacote Linux também.
+# Para distribuição use empacotar.ps1 no Windows (wrapper de scripts/release/empacotar.ps1).
 set -eu
 cd "$(dirname "$0")"
 command -v dotnet >/dev/null || { echo "dotnet não encontrado no PATH (instale o .NET 10 SDK)"; exit 1; }

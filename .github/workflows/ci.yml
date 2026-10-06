@@ -30,9 +30,10 @@ jobs:
       - name: Validate shell scripts
         if: runner.os == 'Linux'
         run: |
-          sh -n installer/pitstop-linux.run.sh
+          sh -n scripts/release/pitstop-linux.run.sh
+          sh -n scripts/install/instalar.sh
+          sh -n scripts/install/desinstalar.sh
           sh -n instalar.sh
-          sh -n desinstalar.sh
           sh -n pit
           sh -n tests/smoke-package-linux.sh
 

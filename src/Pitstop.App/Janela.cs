@@ -254,7 +254,7 @@ sealed partial class Janela : Window
         var sp = new StackPanel { MaxWidth = 720, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 10, Margin = new Thickness(40) };
         sp.Children.Add(new TextBlock { Text = "Crie seu primeiro perfil", FontSize = 28, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.5 }.Res(TextBlock.ForegroundProperty, "Fg"));
         sp.Children.Add(Ui.Paragrafo("Um perfil é uma coisa que o Pitstop sobe e para: um Tomcat com os wars dos seus projetos, uma aplicação Java " +
-                                     "com main, um pacote pronto ou um script npm. Cada tipo pede só os caminhos de que precisa.", 14));
+                                     "com main, um pacote pronto, um script npm ou um comando personalizado. Cada tipo pede só os caminhos de que precisa.", 14));
         var grade = new WrapPanel { Margin = new Thickness(0, 18, 0, 0) };
         foreach (var (tipo, icone, nome, desc, _) in Tipos)
         {

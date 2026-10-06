@@ -12,10 +12,11 @@ param(
     [switch]$SemPath,
     [switch]$NaoAbrir,
     [switch]$SemMenu,
-    [switch]$SemRegistro
+    [switch]$SemRegistro,
+    [string]$Origem = $PSScriptRoot
 )
 $ErrorActionPreference = 'Stop'
-$origem = $PSScriptRoot
+$origem = [IO.Path]::GetFullPath($Origem)
 
 function Pergunta([string]$texto, [bool]$padrao = $true) {
     if ($Silencioso) { return $padrao }
@@ -27,7 +28,7 @@ function Pergunta([string]$texto, [bool]$padrao = $true) {
 
 Write-Host ''
 Write-Host '  Pitstop - instalação' -ForegroundColor Magenta
-Write-Host '  Runner local de Tomcat, aplicações Java e scripts npm.'
+Write-Host '  Runner local de Tomcat, Java, npm e comandos personalizados.'
 Write-Host ''
 
 if (-not (Test-Path (Join-Path $origem 'app\Pitstop.exe'))) { throw "app\Pitstop.exe não encontrado em $origem (rode o instalador de dentro da pasta extraída)" }
@@ -63,6 +64,15 @@ if ($origem.TrimEnd('\') -ne $Destino.TrimEnd('\')) {
         Copy-Item -Recurse (Join-Path $origem $d) $alvo
     }
     foreach ($f in Get-ChildItem $origem -File) { Copy-Item $f.FullName (Join-Path $Destino $f.Name) -Force }
+
+    # No repositório os auxiliares ficam organizados em scripts/install; no pacote já vêm achatados na raiz.
+    $scriptsInstall = Join-Path $origem 'scripts\install'
+    if (Test-Path $scriptsInstall -PathType Container) {
+        foreach ($nome in @('instalar.ps1', 'desinstalar.ps1', 'ferramentas.ps1')) {
+            $fonte = Join-Path $scriptsInstall $nome
+            if (Test-Path $fonte) { Copy-Item $fonte (Join-Path $Destino $nome) -Force }
+        }
+    }
 }
 
 $exe = Join-Path $Destino 'app\Pitstop.exe'
@@ -75,7 +85,7 @@ function Atalho([string]$pasta) {
     $l.TargetPath = $exe
     $l.WorkingDirectory = Split-Path $exe
     $l.IconLocation = "$exe,0"
-    $l.Description = 'Pitstop - Tomcat, Java e npm com um clique'
+    $l.Description = 'Pitstop - Tomcat, Java, npm e comandos com um clique'
     $l.Save()
 }
 if (-not $SemMenu) { Atalho ([Environment]::GetFolderPath('Programs')) }
@@ -101,7 +111,7 @@ if (-not $SemRegistro) {
     $valores = @{
         DisplayName = 'Pitstop'; DisplayVersion = $versao; DisplayIcon = "$exe,0"; InstallLocation = $Destino
         UninstallString = $desinstalar; NoModify = 1; NoRepair = 1
-        Comments = 'Runner local de Tomcat, aplicações Java e scripts npm'
+        Comments = 'Runner local de Tomcat, Java, npm e comandos personalizados'
     }
     foreach ($k in $valores.Keys) {
         $tipo = if ($valores[$k] -is [int]) { 'DWord' } else { 'String' }

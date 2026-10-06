@@ -32,7 +32,7 @@ jobs:
 
       - name: Package Windows and Linux
         shell: powershell
-        run: .\empacotar.ps1
+        run: .\scripts\release\empacotar.ps1
 
       - name: Smoke release archives
         shell: pwsh
@@ -90,6 +90,7 @@ jobs:
           - Linux: baixe pitstop-*-linux-x64.run e execute com sh <arquivo>.run.
           - Os .tar.xz continuam disponiveis como pacotes portateis.
           - Integridade: confira SHA256SUMS.txt.
+          - Perfis: Tomcat, Java, pacotes, npm e Comando personalizado.
           - O instalador pode preparar JDK, Tomcat, Maven e Node.js de forma opcional.
           - Windows: esta versao ainda nao possui assinatura Authenticode; o SmartScreen pode exibir um aviso.
           EOF
