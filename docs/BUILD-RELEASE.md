@@ -44,6 +44,8 @@ O smoke usa uma raiz temporária e não deve alterar a configuração real do us
 - restart/stop;
 - rotação de logs.
 
+O smoke dos pacotes também executa o instalador Windows com `--smoke-update`, validando que uma atualização troca os arquivos do programa sem alterar `.env` nem `config/perfis.json`.
+
 ## Empacotamento
 
 Entry point compatível:
@@ -63,7 +65,7 @@ O empacotador:
 3. copia apenas arquivos permitidos;
 4. achata os scripts de `scripts/install/` para a raiz do pacote;
 5. inclui `web/`, notices e licenças;
-6. gera os `.tar.xz`;
+6. gera o `.zip` portátil do Windows e o `.tar.xz` portátil do Linux;
 7. gera o instalador Windows;
 8. gera o `.run` Linux;
 9. grava `SHA256SUMS.txt`.
@@ -84,7 +86,9 @@ O workflow também executa:
 sh ./tests/smoke-package-linux.sh dist
 ```
 
-em Ubuntu usando exatamente o pacote produzido.
+em Ubuntu usando exatamente o pacote produzido. Esse smoke também simula uma atualização via `.run --update` e confirma que `.env` e `config/perfis.json` continuam intactos.
+
+O smoke Windows também atua como barreira de licenciamento: valida os arquivos de notice obrigatórios, confere as bibliotecas do `Pitstop.deps.json` contra o mapeamento revisado e inspeciona os binários do runtime Windows. A presença de `coreclr.dll`/`Microsoft.DiaSymReader.Native.*` exige os termos da Microsoft .NET Library; se aparecer um binário conhecido com outra licença sem o respectivo notice, a release é interrompida.
 
 ## CI
 
@@ -103,6 +107,32 @@ Ele executa:
 
 CodeQL roda separadamente.
 
+## Atualização pelo aplicativo
+
+A janela consulta `https://api.github.com/repos/Thameus/Pitstop/releases/latest` somente quando o usuário clica em **Buscar atualização**. Não há polling nem serviço residente.
+
+Para a atualização automática funcionar, a Release precisa conter o asset exato da plataforma:
+
+- Windows x64: `pitstop-<versão>-setup-win-x64.exe`;
+- Linux x64: `pitstop-<versão>-linux-x64.run`.
+
+O app exige o digest SHA-256 informado pelo GitHub para o asset. Depois do download e da validação:
+
+1. salva `.env`, `config/perfis.json` e `config/perfis.json.bak` quando existirem em `cache/update-backups/`;
+2. mantém somente os três backups mais recentes;
+3. confirma a parada se houver perfis rodando;
+4. inicia um atualizador externo e encerra o Pitstop graciosamente.
+
+No Windows, o setup recebe:
+
+```text
+--update --destination <raiz> --parent-pid <pid> --restart
+```
+
+Ele espera o processo antigo terminar, extrai o payload embutido e troca `app/`, `web/` e `third-party/`. Cada diretório é montado primeiro como `.update-new`; o diretório anterior vira temporariamente `.update-old` e é restaurado se a troca falhar.
+
+No Linux, um script temporário espera o PID do Pitstop terminar e executa o `.run` oficial em modo `--update <destino>`. Esse modo não abre o assistente de ferramentas: ele apenas reaplica os arquivos do programa preservando os dados locais e devolve o controle para o script, que reabre o aplicativo somente em caso de sucesso.
+
 ## Publicar uma versão
 
 A versão oficial fica em:
@@ -112,7 +142,7 @@ A versão oficial fica em:
 Exemplo:
 
 ```xml
-<Version>3.0.3</Version>
+<Version>3.0.4</Version>
 ```
 
 Fluxo:
@@ -124,8 +154,8 @@ Fluxo:
 5. atualizar a `main` local;
 6. criar tag anotada:
    ```powershell
-   git tag -a v3.0.3 -m "Pitstop 3.0.3"
-   git push origin v3.0.3
+   git tag -a v3.0.4 -m "Pitstop 3.0.4"
+   git push origin v3.0.4
    ```
 7. acompanhar o workflow Release.
 
@@ -149,7 +179,7 @@ Etapas:
 
 ```text
 pitstop-<versão>-setup-win-x64.exe
-pitstop-<versão>-win-x64.tar.xz
+pitstop-<versão>-win-x64.zip
 pitstop-<versão>-linux-x64.run
 pitstop-<versão>-linux-x64.tar.xz
 SHA256SUMS.txt

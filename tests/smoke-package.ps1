@@ -12,15 +12,15 @@ $versions = Get-Content (Join-Path $repo 'third-party\VERSIONS.json') -Raw | Con
 $tar = if ($IsWindows -or $env:OS -eq 'Windows_NT') { Join-Path $env:SystemRoot 'System32\tar.exe' } else { 'tar' }
 if (-not (Get-Command $tar -ErrorAction SilentlyContinue)) { throw "tar not found: $tar" }
 
-$archives = @{
-    'win-x64' = Join-Path $Dist "pitstop-$version-win-x64.tar.xz"
-    'linux-x64' = Join-Path $Dist "pitstop-$version-linux-x64.tar.xz"
-}
+$windowsArchive = Join-Path $Dist "pitstop-$version-win-x64.zip"
+$linuxArchive = Join-Path $Dist "pitstop-$version-linux-x64.tar.xz"
+$obsoleteWindowsTar = Join-Path $Dist "pitstop-$version-win-x64.tar.xz"
 $installers = @{
     'win-x64' = Join-Path $Dist "pitstop-$version-setup-win-x64.exe"
     'linux-x64' = Join-Path $Dist "pitstop-$version-linux-x64.run"
 }
-$releaseFiles = @($archives.Values) + @($installers.Values)
+$releaseFiles = @($windowsArchive, $linuxArchive) + @($installers.Values)
+if (Test-Path $obsoleteWindowsTar) { throw "obsolete Windows portable archive still present: $obsoleteWindowsTar" }
 foreach ($a in $releaseFiles) { if (-not (Test-Path $a)) { throw "release file not found: $a" } }
 
 $sumFile = Join-Path $Dist 'SHA256SUMS.txt'
@@ -39,6 +39,7 @@ $required = @(
     'LICENSE', 'NOTICE', 'LICENCAS.md', 'THIRD-PARTY-NOTICES.md', 'LEIAME.md',
     'third-party/VERSIONS.json',
     'third-party/dotnet/LICENSE.TXT', 'third-party/dotnet/THIRD-PARTY-NOTICES.TXT',
+    'third-party/dotnet/LICENSE-INFORMATION-WINDOWS.md', 'third-party/dotnet/DOTNET-LIBRARY-LICENSE.html',
     'third-party/aspnetcore/LICENSE.txt', 'third-party/aspnetcore/THIRD-PARTY-NOTICES.txt',
     'third-party/windowsdesktop/winforms/LICENSE.TXT', 'third-party/windowsdesktop/winforms/THIRD-PARTY-NOTICES.TXT',
     'third-party/windowsdesktop/wpf/LICENSE.TXT', 'third-party/windowsdesktop/wpf/THIRD-PARTY-NOTICES.TXT',
@@ -73,25 +74,39 @@ function Assert-LibrariesCovered([string[]]$libraries, [string]$rid) {
     }
 }
 
-foreach ($rid in $archives.Keys) {
-    $rootName = "pitstop-$version-$rid"
-    $raw = @(& $tar -tf $archives[$rid])
-    if ($LASTEXITCODE -ne 0) { throw "tar list failed: $rid" }
-    $entries = @($raw | ForEach-Object { $_ -replace '^\./', '' })
-
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$windowsRoot = "pitstop-$version-win-x64"
+$zip = [System.IO.Compression.ZipFile]::OpenRead($windowsArchive)
+try {
+    $windowsEntries = @($zip.Entries | ForEach-Object { $_.FullName.Replace('\', '/').TrimEnd('/') })
     foreach ($rel in $required) {
-        if ($entries -notcontains "$rootName/$rel") { throw "$rid package missing $rel" }
+        if ($windowsEntries -notcontains "$windowsRoot/$rel") { throw "win-x64 package missing $rel" }
     }
-    if ($rid -eq 'win-x64' -and $entries -notcontains "$rootName/ferramentas.ps1") {
+    if ($windowsEntries -notcontains "$windowsRoot/ferramentas.ps1") {
         throw 'win-x64 package missing ferramentas.ps1'
     }
     foreach ($pattern in $forbidden) {
-        $bad = $entries | Where-Object { $_ -match $pattern }
-        if ($bad) { throw "$rid package contains forbidden path: $($bad[0])" }
+        $bad = $windowsEntries | Where-Object { $_ -match $pattern }
+        if ($bad) { throw "win-x64 package contains forbidden path: $($bad[0])" }
     }
 }
+finally {
+    $zip.Dispose()
+}
 
-$linuxVerbose = @(& $tar -tvf $archives['linux-x64'])
+$linuxRoot = "pitstop-$version-linux-x64"
+$raw = @(& $tar -tf $linuxArchive)
+if ($LASTEXITCODE -ne 0) { throw 'tar list failed: linux-x64' }
+$linuxEntries = @($raw | ForEach-Object { $_ -replace '^\./', '' })
+foreach ($rel in $required) {
+    if ($linuxEntries -notcontains "$linuxRoot/$rel") { throw "linux-x64 package missing $rel" }
+}
+foreach ($pattern in $forbidden) {
+    $bad = $linuxEntries | Where-Object { $_ -match $pattern }
+    if ($bad) { throw "linux-x64 package contains forbidden path: $($bad[0])" }
+}
+
+$linuxVerbose = @(& $tar -tvf $linuxArchive)
 if ($LASTEXITCODE -ne 0) { throw 'tar verbose list failed for linux-x64' }
 foreach ($rel in @('app/Pitstop','app/pit','instalar.sh','desinstalar.sh','pit')) {
     $line = $linuxVerbose | Where-Object { $_ -match ("/" + [regex]::Escape($rel) + '$') } | Select-Object -First 1
@@ -104,9 +119,29 @@ $oldRoot = $env:PIT_RAIZ
 $oldAuto = $env:PIT_SEM_AUTOSTART
 try {
     New-Item -ItemType Directory -Force $tmp | Out-Null
-    & $tar -xf $archives['win-x64'] -C $tmp
-    if ($LASTEXITCODE -ne 0) { throw 'failed to extract Windows package' }
+    Expand-Archive -Path $windowsArchive -DestinationPath $tmp -Force
     $pkg = Join-Path $tmp "pitstop-$version-win-x64"
+    # .NET no Windows usa licenciamento misto. Falha fechado se surgir um binario com outra licenca.
+    $dotnetLicenseInfo = Join-Path $pkg 'third-party\dotnet\LICENSE-INFORMATION-WINDOWS.md'
+    $dotnetLibraryLicense = Join-Path $pkg 'third-party\dotnet\DOTNET-LIBRARY-LICENSE.html'
+    $dotnetLibraryBinaries = @('coreclr.dll','Microsoft.DiaSymReader.Native.amd64.dll','PresentationNative_cor3.dll','vcruntime140_cor3.dll','wpfgfx_cor3.dll')
+    $foundDotnetLibraryBinaries = @($dotnetLibraryBinaries | Where-Object { Test-Path (Join-Path $pkg ('app\' + $_)) })
+    if ($foundDotnetLibraryBinaries.Count -gt 0) {
+        if (-not (Test-Path $dotnetLicenseInfo) -or -not (Test-Path $dotnetLibraryLicense)) {
+            throw "Windows package contains .NET Library License binaries but Microsoft license files are missing: $($foundDotnetLibraryBinaries -join ', ')"
+        }
+        $licenseInfoText = Get-Content $dotnetLicenseInfo -Raw
+        $libraryLicenseText = Get-Content $dotnetLibraryLicense -Raw
+        if ($licenseInfoText -notmatch 'coreclr\.dll' -or $licenseInfoText -notmatch 'Microsoft\.DiaSymReader\.Native') {
+            throw 'Microsoft Windows .NET license mapping is incomplete or unexpected'
+        }
+        if ($libraryLicenseText -notmatch 'MICROSOFT SOFTWARE LICENSE TERMS' -or $libraryLicenseText -notmatch 'MICROSOFT \.NET LIBRARY') {
+            throw 'Microsoft .NET Library License snapshot is missing expected terms'
+        }
+    }
+    if (Test-Path (Join-Path $pkg 'app\D3DCompiler_47_cor3.dll')) {
+        throw 'Windows package now contains D3DCompiler_47_cor3.dll (Windows SDK License). Add/review the Windows SDK license before release.'
+    }
 
     $env:PIT_RAIZ = $pkg
     $env:PIT_SEM_AUTOSTART = '1'
@@ -119,6 +154,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup install smoke failed with exit code $LASTEXITCODE" }
     & $installers['win-x64'] --smoke-root-path
     if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup root-path normalization smoke failed with exit code $LASTEXITCODE" }
+    & $installers['win-x64'] --smoke-update
+    if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup update/preservation smoke failed with exit code $LASTEXITCODE" }
 
     # Regressão: Windows PowerShell 5.1 falha em New-Item -Force na raiz de uma unidade já existente.
     # Usa SUBST para testar uma raiz real sem tocar em C:\ ou em outros discos do usuário/runner.
@@ -161,7 +198,7 @@ try {
     }
 
     $linuxRoot = "pitstop-$version-linux-x64"
-    $linuxDepsText = (@(& $tar -xOf $archives['linux-x64'] "./$linuxRoot/app/Pitstop.deps.json") -join [Environment]::NewLine)
+    $linuxDepsText = (@(& $tar -xOf $linuxArchive "./$linuxRoot/app/Pitstop.deps.json") -join [Environment]::NewLine)
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($linuxDepsText)) { throw 'could not read Linux Pitstop.deps.json' }
     $linuxDeps = $linuxDepsText | ConvertFrom-Json
     $linuxLibs = @($linuxDeps.libraries.PSObject.Properties.Name)
@@ -175,7 +212,7 @@ try {
         if ($linuxLibs -notcontains $lib) { throw "Linux third-party version mismatch or dependency missing: $lib" }
     }
 
-    Write-Host 'PACKAGE SMOKE OK: hashes, privacy, notices, Linux modes, dependencies, Windows CLI, Setup EXE, isolated install and drive-root regression.' -ForegroundColor Green
+    Write-Host 'PACKAGE SMOKE OK: hashes, privacy, licenses/notices, Linux modes, dependencies, Windows CLI, Setup EXE, isolated install and drive-root regression.' -ForegroundColor Green
 }
 finally {
     $env:PIT_RAIZ = $oldRoot

@@ -1,6 +1,6 @@
 ﻿<#
   Gera os pacotes de distribuição do Pitstop em dist\:
-    pitstop-<versão>-win-x64.tar.xz e pitstop-<versão>-linux-x64.tar.xz
+    pitstop-<versão>-win-x64.zip e pitstop-<versão>-linux-x64.tar.xz
   Cada um traz o .NET embutido (self-contained: quem baixa não precisa instalar nada além do que os perfis usam),
   a tela web, o instalador e as licenças. Não leva nada desta máquina: .env, config\, cache\, logs\, bases\ ficam fora.
 
@@ -169,34 +169,49 @@ foreach ($rid in $Rids) {
     Copy-Item (Join-Path $repo 'LEIAME.md') (Join-Path $dir 'LEIAME.md')
     Get-ChildItem $app -Filter '*.pdb' -File | Remove-Item
 
-    # manifesto mtree: diretórios 0755; executáveis do Linux e scripts 0755; o resto 0644
-    $exec = @('app/Pitstop', 'app/pit', 'app/createdump', 'instalar.sh', 'desinstalar.sh', 'pit')
-    $agora = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $linhas = New-Object System.Collections.Generic.List[string]
-    $linhas.Add('#mtree')
-    $linhas.Add("./$nome type=dir mode=0755 time=$agora.0")
-    Get-ChildItem $dir -Recurse | Sort-Object FullName | ForEach-Object {
-        $rel = $_.FullName.Substring($dir.Length + 1).Replace('\', '/')
-        $caminho = Escapar-Mtree "./$nome/$rel"
-        if ($_.PSIsContainer) { $linhas.Add("$caminho type=dir mode=0755 time=$agora.0") }
-        else {
-            $modo = if ($rid -like 'linux-*' -and ($exec -contains $rel -or $rel -like '*.so')) { '0755' } else { '0644' }
-            $t = [DateTimeOffset]::new($_.LastWriteTimeUtc).ToUnixTimeSeconds()
-            $linhas.Add("$caminho type=file mode=$modo time=$t.0 contents=$(Escapar-Mtree $_.FullName.Replace('\', '/'))")
-        }
+    $saida = $null
+    if ($rid -eq 'win-x64') {
+        # Windows: ZIP é o formato portátil nativo e mais simples para o usuário.
+        # Remove o formato antigo para impedir que um .tar.xz Windows obsoleto seja publicado por engano.
+        $obsoleto = Join-Path $dist "$nome.tar.xz"
+        if (Test-Path $obsoleto) { Remove-Item $obsoleto -Force }
+        $saida = Join-Path $dist "$nome.zip"
+        if (Test-Path $saida) { Remove-Item $saida -Force }
+        Compress-Archive -Path $dir -DestinationPath $saida -CompressionLevel Optimal
+        $mb = [math]::Round((Get-Item $saida).Length / 1MB, 1)
+        Adicionar-Hash $saida
+        Write-Host "   $saida ($mb MB) - pacote portátil" -ForegroundColor Green
     }
-    $mtree = Join-Path $stage "$nome.mtree"
-    [IO.File]::WriteAllLines($mtree, $linhas)
-    $saida = Join-Path $dist "$nome.tar.xz"
-    if (Test-Path $saida) { Remove-Item $saida }
-    Push-Location $stage
-    & $tar --options xz:compression-level=9 -cJf $saida "@$nome.mtree"
-    $rc = $LASTEXITCODE
-    Pop-Location
-    if ($rc -ne 0) { throw "tar falhou ($rid)" }
-    $mb = [math]::Round((Get-Item $saida).Length / 1MB, 1)
-    Adicionar-Hash $saida
-    Write-Host "   $saida ($mb MB)" -ForegroundColor Green
+    else {
+        # Linux: mtree preserva modos 0755/0644 dentro do tar.xz.
+        $exec = @('app/Pitstop', 'app/pit', 'app/createdump', 'instalar.sh', 'desinstalar.sh', 'pit')
+        $agora = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $linhas = New-Object System.Collections.Generic.List[string]
+        $linhas.Add('#mtree')
+        $linhas.Add("./$nome type=dir mode=0755 time=$agora.0")
+        Get-ChildItem $dir -Recurse | Sort-Object FullName | ForEach-Object {
+            $rel = $_.FullName.Substring($dir.Length + 1).Replace('\', '/')
+            $caminho = Escapar-Mtree "./$nome/$rel"
+            if ($_.PSIsContainer) { $linhas.Add("$caminho type=dir mode=0755 time=$agora.0") }
+            else {
+                $modo = if ($exec -contains $rel -or $rel -like '*.so') { '0755' } else { '0644' }
+                $t = [DateTimeOffset]::new($_.LastWriteTimeUtc).ToUnixTimeSeconds()
+                $linhas.Add("$caminho type=file mode=$modo time=$t.0 contents=$(Escapar-Mtree $_.FullName.Replace('\', '/'))")
+            }
+        }
+        $mtree = Join-Path $stage "$nome.mtree"
+        [IO.File]::WriteAllLines($mtree, $linhas)
+        $saida = Join-Path $dist "$nome.tar.xz"
+        if (Test-Path $saida) { Remove-Item $saida -Force }
+        Push-Location $stage
+        & $tar --options xz:compression-level=9 -cJf $saida "@$nome.mtree"
+        $rc = $LASTEXITCODE
+        Pop-Location
+        if ($rc -ne 0) { throw "tar falhou ($rid)" }
+        $mb = [math]::Round((Get-Item $saida).Length / 1MB, 1)
+        Adicionar-Hash $saida
+        Write-Host "   $saida ($mb MB) - pacote portátil" -ForegroundColor Green
+    }
 
     if ($rid -eq 'win-x64') {
         $setupExe = Gerar-SetupWindows $dir $nome
