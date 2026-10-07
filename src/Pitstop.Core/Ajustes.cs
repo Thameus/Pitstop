@@ -62,7 +62,7 @@ public static class Ajustes
             if (i >= 0) linhas[i] = nova;
             else if (v != "") linhas.Add(nova);
         }
-        Config.GravarAtomico(arq, string.Join("\n", linhas) + "\n");
+        Config.GravarAtomico(arq, string.Join("\n", linhas) + "\n", backup: false);
         Env.Recarregar();
     }
 

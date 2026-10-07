@@ -119,7 +119,6 @@ public static class Config
     public static void GarantirArquivo()
     {
         if (File.Exists(Arquivo)) return;
-        Directory.CreateDirectory(Path.GetDirectoryName(Arquivo)!);
         GravarAtomico(Arquivo, "{\n  \"perfis\": {}\n}\n", backup: false);
     }
 

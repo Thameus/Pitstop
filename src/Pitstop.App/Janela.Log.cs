@@ -134,6 +134,7 @@ sealed partial class Janela
         assinaturaLog?.Dispose();
         linhasLog.Clear();
         visiveis.Clear();
+        AtualizarLogVazio();
         var g = ++geracaoLog;
         assinaturaLog = runner.Logs.Assinar(atual, lote => Dispatcher.UIThread.Post(() => { if (g == geracaoLog) Receber(lote); }));
     }
@@ -150,6 +151,7 @@ sealed partial class Janela
         foreach (var l in lote)
             if (f == "" || l.Contains(f, StringComparison.OrdinalIgnoreCase)) visiveis.Add(new LinhaLog(l));
         while (visiveis.Count > LogMax) visiveis.RemoveAt(0);
+        AtualizarLogVazio();
         RolarLogSeSeguindo();
     }
 
@@ -159,6 +161,7 @@ sealed partial class Janela
         visiveis = new ObservableCollection<LinhaLog>(
             linhasLog.Where(l => f == "" || l.Contains(f, StringComparison.OrdinalIgnoreCase)).Select(l => new LinhaLog(l)));
         logLista.ItemsSource = visiveis;
+        AtualizarLogVazio();
         RolarLogSeSeguindo();
     }
 

@@ -238,6 +238,7 @@ As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõ
 ## Documentação
 
 - [LEIAME.md](LEIAME.md) — instalação e uso rápido;
+- [DESIGN.md](DESIGN.md) — sistema visual e baseline de UI desktop/web;
 - [docs/ESTRUTURA.md](docs/ESTRUTURA.md) — organização do repositório;
 - [docs/BUILD-RELEASE.md](docs/BUILD-RELEASE.md) — build, CI, empacotamento, tags e release;
 - [LICENCAS.md](LICENCAS.md) — resumo das licenças redistribuídas;
