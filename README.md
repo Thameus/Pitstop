@@ -56,7 +56,7 @@ Em **Ajustes → Atualizações**, o Pitstop pode consultar manualmente a últim
 
 Quando existe uma versão nova, o fluxo é:
 
-1. baixar o instalador oficial adequado ao sistema;
+1. baixar o pacote oficial adequado ao sistema;
 2. validar o SHA-256 publicado pelo GitHub;
 3. criar um backup pequeno de `.env` e dos arquivos de `config/`;
 4. pedir confirmação se houver perfis em execução;
@@ -64,7 +64,7 @@ Quando existe uma versão nova, o fluxo é:
 6. substituir somente os arquivos do programa;
 7. reabrir a versão nova.
 
-No Windows, o próprio `Pitstop-Setup.exe` possui um modo interno `--update`. A troca de `app/`, `web/` e `third-party/` é feita por diretórios temporários com restauração da versão anterior se a substituição falhar. No Linux, o pacote `.run` oficial é executado depois que o processo atual termina.
+No Windows, o aplicativo baixa o ZIP portátil e copia o helper integrado `app/updater/Pitstop.Updater.exe` para `%TEMP%`. Esse helper roda fora da instalação, valida novamente o SHA-256, usa lock exclusivo por instalação, espera o processo antigo terminar, verifica outros `Pitstop.exe`/`pit.exe` ainda usando a mesma raiz e faz retry de locks transitórios antes de trocar `app/`, `web/` e `third-party/`. Cada troca usa diretórios temporários e restaura a versão anterior se a ativação falhar. O Setup continua sendo usado para instalação/reinstalação. No Linux, o pacote `.run` oficial é executado depois que o processo atual termina.
 
 Os backups mínimos ficam em `cache/update-backups/`; somente os três mais recentes são mantidos.
 

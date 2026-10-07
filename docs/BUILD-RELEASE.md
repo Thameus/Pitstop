@@ -44,7 +44,7 @@ O smoke usa uma raiz temporária e não deve alterar a configuração real do us
 - restart/stop;
 - rotação de logs.
 
-O smoke dos pacotes também executa o instalador Windows com `--smoke-update`, validando que uma atualização troca os arquivos do programa sem alterar `.env` nem `config/perfis.json`.
+O smoke dos pacotes executa o helper integrado `Pitstop.Updater.exe` e também o modo legado `--smoke-update` do Setup. Ele valida troca de arquivos, detecção de bloqueadores e preservação de `.env` e `config/perfis.json`.
 
 ## Empacotamento
 
@@ -113,7 +113,7 @@ A janela consulta `https://api.github.com/repos/Thameus/Pitstop/releases/latest`
 
 Para a atualização automática funcionar, a Release precisa conter o asset exato da plataforma:
 
-- Windows x64: `pitstop-<versão>-setup-win-x64.exe`;
+- Windows x64: `pitstop-<versão>-win-x64.zip`;
 - Linux x64: `pitstop-<versão>-linux-x64.run`.
 
 O app exige o digest SHA-256 informado pelo GitHub para o asset. Depois do download e da validação:
@@ -123,13 +123,15 @@ O app exige o digest SHA-256 informado pelo GitHub para o asset. Depois do downl
 3. confirma a parada se houver perfis rodando;
 4. inicia um atualizador externo e encerra o Pitstop graciosamente.
 
-No Windows, o setup recebe:
+No Windows, o pacote inclui `app/updater/Pitstop.Updater.exe`. O aplicativo copia esse helper para a mesma pasta temporária do download e o inicia com:
 
 ```text
---update --destination <raiz> --parent-pid <pid> --restart
+--package <zip> --sha256 <digest> --destination <raiz> --parent-pid <pid> --restart --cleanup <pasta-temporaria>
 ```
 
-Ele espera o processo antigo terminar, extrai o payload embutido e troca `app/`, `web/` e `third-party/`. Cada diretório é montado primeiro como `.update-new`; o diretório anterior vira temporariamente `.update-old` e é restaurado se a troca falhar.
+O helper roda fora da instalação, valida novamente o SHA-256 do ZIP, usa mutex por instalação, extrai e valida a estrutura do pacote antes da troca, espera o PID antigo terminar e verifica se outro `Pitstop.exe`/`pit.exe` da mesma raiz continua aberto. A troca de `app/`, `web/` e `third-party/` usa `.update-new`/`.update-old`, com retry curto para locks transitórios e rollback se a ativação falhar. O novo Pitstop é reiniciado com `WorkingDirectory` em `<raiz>\app`; em caso de sucesso o diretório temporário de download/helper é removido depois que o updater termina.
+
+O `Pitstop-Setup.exe --update` permanece como compatibilidade/fallback e para reinstalação manual, mas não é usado pelo botão normal de atualização do aplicativo.
 
 No Linux, um script temporário espera o PID do Pitstop terminar e executa o `.run` oficial em modo `--update <destino>`. Esse modo não abre o assistente de ferramentas: ele apenas reaplica os arquivos do programa preservando os dados locais e devolve o controle para o script, que reabre o aplicativo somente em caso de sucesso.
 

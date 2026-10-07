@@ -94,6 +94,39 @@ function Adicionar-Hash([string]$arquivo) {
     "$hash  $(Split-Path $arquivo -Leaf)" | Add-Content $somas
 }
 
+function Adicionar-UpdaterWindows([string]$app) {
+    $build = Join-Path $stage 'updater-win-x64'
+    $buildBase = Join-Path $stage 'updater-win-x64-bin'
+    if (Test-Path $build) { Remove-Item $build -Recurse -Force }
+    if (Test-Path $buildBase) { Remove-Item $buildBase -Recurse -Force }
+
+    $publishArgs = @(
+        'publish', 'src\Pitstop.Updater\Pitstop.Updater.csproj',
+        '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
+        '-o', $build, '--nologo', '-v', 'q',
+        '-p:DebugType=none', '-p:PublishSingleFile=true', '-p:PublishTrimmed=true',
+        '-p:EnableCompressionInSingleFile=true', "-p:BaseOutputPath=$buildBase\"
+    )
+    & $dotnet @publishArgs
+    if ($LASTEXITCODE -ne 0) { throw 'publish do Pitstop.Updater.exe falhou' }
+
+    $exe = Join-Path $build 'Pitstop.Updater.exe'
+    if (-not (Test-Path $exe)) { throw 'Pitstop.Updater.exe não foi gerado' }
+    $destino = Join-Path $app 'updater\Pitstop.Updater.exe'
+    New-Item -ItemType Directory -Force (Split-Path $destino -Parent) | Out-Null
+    Copy-Item $exe $destino -Force
+
+    if ($Assinar) {
+        & $Signtool sign /sha1 $Certificado /fd sha256 /tr $Timestamp /td sha256 /d 'Pitstop Updater' $destino
+        if ($LASTEXITCODE -ne 0) { throw 'assinatura do Pitstop.Updater.exe falhou' }
+        & $Signtool verify /pa /q $destino
+        if ($LASTEXITCODE -ne 0) { throw 'verificação do Pitstop.Updater.exe falhou' }
+    }
+
+    Remove-Item $build -Recurse -Force
+    Remove-Item $buildBase -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function Gerar-SetupWindows([string]$dir, [string]$nome) {
     $payload = Join-Path $stage "$nome-payload.zip"
     $build = Join-Path $stage "$nome-setup"
@@ -151,6 +184,7 @@ foreach ($rid in $Rids) {
         & $dotnet publish $proj -c Release -r $rid --self-contained true -o $app --nologo -v q -p:DebugType=none -p:GenerateDocumentationFile=false @extra
         if ($LASTEXITCODE -ne 0) { throw "publish falhou: $proj ($rid)" }
     }
+    if ($rid -eq 'win-x64') { Adicionar-UpdaterWindows $app }
     if ($Assinar -and $rid -like 'win-*') {
         # timestamp: a assinatura continua válida depois que o certificado vencer
         $exes = @((Join-Path $app 'Pitstop.exe'), (Join-Path $app 'pit.exe'))

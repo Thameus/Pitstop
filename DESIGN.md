@@ -136,7 +136,7 @@ Uso:
 - Iniciar;
 - Parar quando é a ação principal do estado atual;
 - confirmação positiva de dialog;
-- Atualizar e reiniciar.
+- Baixar e atualizar.
 
 Regra: no máximo uma ação primária por grupo lógico.
 
