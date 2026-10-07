@@ -144,7 +144,7 @@ A versão oficial fica em:
 Exemplo:
 
 ```xml
-<Version>3.0.5</Version>
+<Version>3.0.6</Version>
 ```
 
 Fluxo:
@@ -156,8 +156,8 @@ Fluxo:
 5. atualizar a `main` local;
 6. criar tag anotada:
    ```powershell
-   git tag -a v3.0.5 -m "Pitstop 3.0.5"
-   git push origin v3.0.5
+   git tag -a v3.0.6 -m "Pitstop 3.0.6"
+   git push origin v3.0.6
    ```
 7. acompanhar o workflow Release.
 

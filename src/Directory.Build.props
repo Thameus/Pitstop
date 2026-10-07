@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>3.0.5</Version>
+    <Version>3.0.6</Version>
     <Product>Pitstop</Product>
     <Description>Runner local para Tomcat, Java, npm, pacotes e comandos personalizados.</Description>
     <RepositoryUrl>https://github.com/Thameus/Pitstop</RepositoryUrl>
