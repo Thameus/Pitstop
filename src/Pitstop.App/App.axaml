@@ -84,7 +84,7 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="10"/>
-      <Setter Property="MinHeight" Value="40"/>
+      <Setter Property="MinHeight" Value="44"/>
       <Setter Property="Padding" Value="14,0"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -156,8 +156,8 @@
     </Style>
 
     <Style Selector="Button.ico">
-      <Setter Property="Width" Value="40"/>
-      <Setter Property="Height" Value="40"/>
+      <Setter Property="Width" Value="44"/>
+      <Setter Property="Height" Value="44"/>
       <Setter Property="Padding" Value="0"/>
     </Style>
 
@@ -227,7 +227,7 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="10"/>
-      <Setter Property="MinHeight" Value="42"/>
+      <Setter Property="MinHeight" Value="44"/>
       <Setter Property="Padding" Value="12,0"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FontFamily" Value="{StaticResource FonteMono}"/>

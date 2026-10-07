@@ -116,7 +116,7 @@ Ela gera em `dist/`:
 
 - instalador Windows `.exe`;
 - instalador Linux self-extracting `.run`;
-- pacotes portáteis Windows/Linux `.tar.xz`;
+- pacote portátil Windows `.zip` e pacote portátil Linux `.tar.xz`;
 - `SHA256SUMS.txt`.
 
 O GitHub Release é disparado por uma tag `v<versão>`. A tag precisa ser igual à versão de `src/Directory.Build.props`.
@@ -238,6 +238,7 @@ As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõ
 ## Documentação
 
 - [LEIAME.md](LEIAME.md) — instalação e uso rápido;
+- [DESIGN.md](DESIGN.md) — sistema visual e baseline de UI desktop/web;
 - [docs/ESTRUTURA.md](docs/ESTRUTURA.md) — organização do repositório;
 - [docs/BUILD-RELEASE.md](docs/BUILD-RELEASE.md) — build, CI, empacotamento, tags e release;
 - [LICENCAS.md](LICENCAS.md) — resumo das licenças redistribuídas;

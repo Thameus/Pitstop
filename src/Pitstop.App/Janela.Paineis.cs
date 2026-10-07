@@ -129,8 +129,8 @@ sealed partial class Janela
                         Ui.Procurar(home, "Pasta do Tomcat"))),
                     Ui.Campo("JDK (JAVA_HOME)", Pasta(java, "Pasta do JDK"))),
                 Ui.Grade(2,
-                    Ui.Campo("Maven do build (vazio = padrão ou mvn do PATH)", Pasta(maven, "Pasta do Maven")),
-                    Ui.Campo("conf de origem (vazio = <Tomcat>/conf)", Pasta(conf, "Pasta conf de origem")))),
+                    Ui.Campo("Maven para Build (vazio = padrão ou mvn do PATH)", Pasta(maven, "Pasta do Maven")),
+                    Ui.Campo("Configuração do Tomcat (vazio = <Tomcat>/conf)", Pasta(conf, "Pasta conf de origem")))),
             Ui.Bloco("Portas", null, null,
                 Ui.Grade(5,
                     Ui.Campo("HTTP", F(fServ, "porta")),
@@ -139,8 +139,8 @@ sealed partial class Janela
                     Ui.Campo("JMX", F(fServ, "portaJmx", "desligado")),
                     Ui.Campo("AJP", F(fServ, "portaAjp", "desligado")))),
             Ui.Bloco("JVM", null, null,
-                Ui.Campo("VM args (CATALINA_OPTS)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dspring.profiles.active=dev")),
-                Ui.Campo("URL ao abrir", F(fServ, "url"))));
+                Ui.Campo("Argumentos da VM (CATALINA_OPTS)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dspring.profiles.active=dev")),
+                Ui.Campo("URL do perfil", F(fServ, "url"))));
     }
 
     Control PainelApp()
@@ -169,8 +169,8 @@ sealed partial class Janela
                 Ui.Campo("Argumentos do programa", F(fApp, "args")),
                 Ui.Grade(2,
                     Ui.Campo("Debug (JDWP)", F(fApp, "portaDebug", "5006")),
-                    Ui.Campo("Pastas extras no PATH (bibliotecas nativas; relativas ao módulo; separar por ;)", F(fApp, "pathExtra"))),
-                Ui.Campo("Pronto quando o log tiver (regex; vazio = 3 s depois de subir)", F(fApp, "prontoLog")),
+                    Ui.Campo("PATH adicional (bibliotecas nativas; relativo ao módulo; separar por ;)", F(fApp, "pathExtra"))),
+                Ui.Campo("Pronto quando o log corresponder (regex; vazio = 3 s depois de iniciar)", F(fApp, "prontoLog")),
                 compilarAntes));
     }
 
@@ -187,16 +187,16 @@ sealed partial class Janela
                 Ui.Grade(2,
                     Ui.Campo("Jar (relativo à extração; vazio = o que tem Main-Class fora de lib)", F(fZip, "jar", "ex.: app/bin/app.jar")),
                     Ui.Campo("Pasta de trabalho (relativa à extração; vazio = pasta do jar)", F(fZip, "trabalho", "ex.: app/bin")),
-                    Ui.Campo("conf a copiar antes de subir (não sobrescreve; vazio = nada)", Pasta(F(fZip, "conf"), "Pasta de configuração")),
-                    Ui.Campo("Destino da conf (relativo à pasta de trabalho)", F(fZip, "confDestino", "vazio = a própria pasta de trabalho")))),
+                    Ui.Campo("Configuração a copiar antes de iniciar (não sobrescreve; vazio = nenhuma)", Pasta(F(fZip, "conf"), "Pasta de configuração")),
+                    Ui.Campo("Destino da configuração (relativo à pasta de trabalho)", F(fZip, "confDestino", "vazio = a própria pasta de trabalho")))),
             Ui.Bloco("Execução", null, null,
                 Ui.Campo("Java para rodar (JAVA_HOME)", Pasta(F(fZip, "javaHome"), "Java para rodar")),
                 Ui.Campo("VM args", F(fZip, "vmArgs", "ex.: -Xms256m -Xmx512m")),
                 Ui.Campo("Argumentos do programa", F(fZip, "args")),
                 Ui.Grade(2,
                     Ui.Campo("Debug (JDWP)", F(fZip, "portaDebug", "5006")),
-                    Ui.Campo("Pastas extras no PATH (relativas à pasta de trabalho; separar por ;)", F(fZip, "pathExtra"))),
-                Ui.Campo("Pronto quando o log tiver (regex; vazio = 3 s depois de subir)", F(fZip, "prontoLog"))));
+                    Ui.Campo("PATH adicional (relativo à pasta de trabalho; separar por ;)", F(fZip, "pathExtra"))),
+                Ui.Campo("Pronto quando o log corresponder (regex; vazio = 3 s depois de iniciar)", F(fZip, "prontoLog"))));
     }
 
     Control PainelNpm()
@@ -224,8 +224,8 @@ sealed partial class Janela
             Ui.Bloco("Servidor", null, null,
                 Ui.Grade(2,
                     Ui.Campo("Porta HTTP (a que o script abre)", F(fNpm, "porta", "4200")),
-                    Ui.Campo("URL ao abrir", F(fNpm, "url"))),
-                Ui.Campo("Pronto quando o log tiver (regex)", F(fNpm, "prontoLog", "vazio = Compiled successfully (Angular/webpack), ready in (Vite)"))),
+                    Ui.Campo("URL do perfil", F(fNpm, "url"))),
+                Ui.Campo("Pronto quando o log corresponder (regex)", F(fNpm, "prontoLog", "vazio = Compiled successfully (Angular/webpack), ready in (Vite)"))),
             Ui.Bloco("Node e build", null, null,
                 Ui.Grade(2,
                     Ui.Campo("Pasta do Node (vazio = node do PATH)", Pasta(F(fNpm, "nodeHome", "vazio = Node do PATH"), "Pasta do Node.js")),
@@ -255,12 +255,12 @@ sealed partial class Janela
             Ui.Bloco("Opções avançadas", null, null,
                 Ui.Grade(2,
                     Ui.Campo("Shell", F(fComando, "shell", "auto | cmd | powershell | sh | bash | custom")),
-                    Ui.Campo("Interpretador personalizado (quando shell = custom)", F(fComando, "shellPersonalizado")),
+                    Ui.Campo("Interpretador personalizado (shell = custom)", F(fComando, "shellPersonalizado")),
                     Ui.Campo("Arquivo .env", Ui.ComBotoes(F(fComando, "envArquivo"), Ui.Procurar(fComando["envArquivo"], "Arquivo .env", false))),
                     Ui.Campo("Porta opcional", F(fComando, "porta", "vazio = não observar porta")),
-                    Ui.Campo("URL opcional", F(fComando, "url", "https:// ou http://")),
+                    Ui.Campo("URL do perfil (opcional)", F(fComando, "url", "https:// ou http://")),
                     Ui.Campo("Pronto quando o log contiver", F(fComando, "prontoLog", "vazio = pronto ao iniciar ou pela porta")),
-                    Ui.Campo("Tempo limite em segundos", F(fComando, "timeoutExecucaoSeg", "vazio = sem limite"))),
+                    Ui.Campo("Tempo limite (segundos)", F(fComando, "timeoutExecucaoSeg", "vazio = sem limite"))),
                 Ui.Campo("Variáveis de ambiente extras", env),
                 comandoAbrirPronto,
                 comandoAutoIniciar));

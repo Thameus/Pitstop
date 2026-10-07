@@ -16,8 +16,8 @@ static class Desenho
 
     public static readonly Dictionary<string, Color> Selos = new()
     {
-        ["noar"] = Color.Parse("#43C07F"), ["debug"] = Color.Parse("#6EA8FE"),
-        ["ocupado"] = Color.Parse("#E3A63F"), ["erro"] = Color.Parse("#F0625E"),
+        ["noar"] = Color.Parse("#43C07F"), ["debug"] = Color.Parse("#6EA8FE"), ["externo"] = Color.Parse("#6EA8FE"),
+        ["ocupado"] = Color.Parse("#E3A63F"), ["portaocupada"] = Color.Parse("#E3A63F"), ["erro"] = Color.Parse("#F0625E"),
     };
 
     /// <summary>Ícone com selo (parado = sem selo). 64 px: o sistema reduz para o tamanho da bandeja.</summary>

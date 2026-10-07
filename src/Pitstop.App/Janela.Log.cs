@@ -34,6 +34,8 @@ sealed partial class Janela
     ListBox logLista = null!;
     TextBox filtroLog = null!;
     ToggleSwitch seguirLog = null!;
+    StackPanel logVazio = null!;
+    TextBlock logVazioTitulo = null!, logVazioTexto = null!;
     IDisposable? assinaturaLog;
     int geracaoLog;
     readonly DispatcherTimer filtroRelogio = new() { Interval = TimeSpan.FromMilliseconds(200) };
@@ -93,21 +95,46 @@ sealed partial class Janela
         tudo.Click += (_, _) => Copiar(visiveis.Select(l => l.Texto));
         logLista.ContextMenu = new ContextMenu { Items = { copiar, tudo } };
 
+        logVazioTitulo = Ui.Txt("Nenhum log ainda", 15, "Fg", FontWeight.SemiBold);
+        logVazioTexto = Ui.Paragrafo("Os logs deste perfil aparecerão aqui depois que ele for iniciado.", 13);
+        logVazio = new StackPanel
+        {
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+            Children = { logVazioTitulo, logVazioTexto }
+        };
+        var areaLog = new Grid { Children = { logLista, logVazio } };
+
         var caixa = new DockPanel();
         DockPanel.SetDock(barraBorda, Dock.Top);
         caixa.Children.Add(barraBorda);
-        caixa.Children.Add(logLista);
+        caixa.Children.Add(areaLog);
         var borda = new Border { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Child = caixa, ClipToBounds = true }
             .Res(Border.BorderBrushProperty, "Line").Res(Border.BackgroundProperty, "LogBg");
         return new Grid { Margin = new Thickness(40, 24, 40, 32), Children = { borda } };
     }
 
+    void AtualizarLogVazio()
+    {
+        if (logVazio == null) return;
+        var vazio = visiveis.Count == 0;
+        logVazio.IsVisible = vazio;
+        if (!vazio) return;
+        var filtrando = linhasLog.Count > 0 && !string.IsNullOrWhiteSpace(filtroLog.Text);
+        logVazioTitulo.Text = filtrando ? "Nenhuma linha corresponde ao filtro" : "Nenhum log ainda";
+        logVazioTexto.Text = filtrando
+            ? "Ajuste ou limpe o filtro para voltar a ver as linhas do log."
+            : "Os logs deste perfil aparecerão aqui depois que ele for iniciado.";
+    }
     /// <summary>Troca o ouvinte para o perfil atual: fim do buffer na hora, depois os lotes de 150 ms.</summary>
     void ConectarLog()
     {
         assinaturaLog?.Dispose();
         linhasLog.Clear();
         visiveis.Clear();
+        AtualizarLogVazio();
         var g = ++geracaoLog;
         assinaturaLog = runner.Logs.Assinar(atual, lote => Dispatcher.UIThread.Post(() => { if (g == geracaoLog) Receber(lote); }));
     }
@@ -124,6 +151,7 @@ sealed partial class Janela
         foreach (var l in lote)
             if (f == "" || l.Contains(f, StringComparison.OrdinalIgnoreCase)) visiveis.Add(new LinhaLog(l));
         while (visiveis.Count > LogMax) visiveis.RemoveAt(0);
+        AtualizarLogVazio();
         RolarLogSeSeguindo();
     }
 
@@ -133,6 +161,7 @@ sealed partial class Janela
         visiveis = new ObservableCollection<LinhaLog>(
             linhasLog.Where(l => f == "" || l.Contains(f, StringComparison.OrdinalIgnoreCase)).Select(l => new LinhaLog(l)));
         logLista.ItemsSource = visiveis;
+        AtualizarLogVazio();
         RolarLogSeSeguindo();
     }
 

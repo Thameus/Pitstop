@@ -119,8 +119,7 @@ public static class Config
     public static void GarantirArquivo()
     {
         if (File.Exists(Arquivo)) return;
-        Directory.CreateDirectory(Path.GetDirectoryName(Arquivo)!);
-        File.WriteAllText(Arquivo, "{\n  \"perfis\": {}\n}\n", new UTF8Encoding(false));
+        GravarAtomico(Arquivo, "{\n  \"perfis\": {}\n}\n", backup: false);
     }
 
     public static JsonObject Ler()
@@ -154,8 +153,7 @@ public static class Config
         salvar.Remove("_versao");
         foreach (var (k, e) in GlobaisEnv)
             if (Env.Txt(e) != null) salvar.Remove(k);
-        if (File.Exists(Arquivo)) File.Copy(Arquivo, Arquivo + ".bak", true);
-        File.WriteAllText(Arquivo, salvar.ToJsonString(JsonAux.Indentado) + "\n", new UTF8Encoding(false));
+        GravarAtomico(Arquivo, salvar.ToJsonString(JsonAux.Indentado) + "\n");
         return Versao();
     }
 
@@ -209,9 +207,25 @@ public static class Config
             novos[k == velho ? novo : k] = v;
         }
         raiz["perfis"] = novos;
-        File.Copy(Arquivo, Arquivo + ".bak", true);
-        File.WriteAllText(Arquivo, raiz.ToJsonString(JsonAux.Indentado) + "\n", new UTF8Encoding(false));
+        GravarAtomico(Arquivo, raiz.ToJsonString(JsonAux.Indentado) + "\n");
         return Versao();
+    }
+
+    internal static void GravarAtomico(string arquivo, string conteudo, bool backup = true)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(arquivo)!);
+        var temporario = arquivo + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            File.WriteAllText(temporario, conteudo, new UTF8Encoding(false));
+            if (File.Exists(arquivo))
+            {
+                if (backup) File.Copy(arquivo, arquivo + ".bak", true);
+                File.Move(temporario, arquivo, true);
+            }
+            else File.Move(temporario, arquivo);
+        }
+        finally { try { if (File.Exists(temporario)) File.Delete(temporario); } catch { } }
     }
 
     public static IEnumerable<string> NomesPerfis(JsonObject cfg) =>

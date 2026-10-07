@@ -7,8 +7,10 @@ src/**/bin/
 src/**/obj/
 config/perfis.json
 config/perfis.json.bak
+config/perfis.json.tmp-*
 Pitstop.lnk
 .env
+.env.tmp-*
 .claude/settings.local.json
 
 # IDE/editor local state

@@ -83,6 +83,7 @@ static class Ui
         var sp = new StackPanel { Spacing = 6 };
         var cab = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         cab.Children.Add(Txt(rotulo, 12, "Mut", FontWeight.Medium));
+        Avalonia.Automation.AutomationProperties.SetName(controle, rotulo);
         if (info != null) cab.Children.Add(info);
         sp.Children.Add(cab);
         sp.Children.Add(controle);
@@ -141,7 +142,7 @@ static class Ui
         new Ellipse { Width = d, Height = d, VerticalAlignment = VerticalAlignment.Center }.Res(Shape.FillProperty, "Off");
 
     /// <summary>Recurso de cor do estado: parado · noar · debug · ocupado · erro (tokens do design visual do Pitstop).</summary>
-    public static string CorEstado(string k) => k switch { "noar" => "Ok", "debug" => "Dbg", "ocupado" => "Warn", "erro" => "Err", _ => "Off" };
+    public static string CorEstado(string k) => k switch { "noar" => "Ok", "debug" or "externo" => "Dbg", "ocupado" or "portaocupada" => "Warn", "erro" => "Err", _ => "Off" };
 
     public static void PintarPonto(Ellipse e, string k) => e.Res(Shape.FillProperty, CorEstado(k));
 
@@ -158,12 +159,12 @@ static class Ui
         var sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 4, 0), Spacing = 2 };
         foreach (var b in botoes)
         {
-            b.Width = b.Height = 34;
-            b.MinHeight = 34;
-            b.Focusable = false;
+            b.Width = b.Height = 36;
+            b.MinHeight = 36;
+            b.Focusable = true;
             sp.Children.Add(b);
         }
-        campo.Padding = new Thickness(12, 0, 8 + botoes.Length * 36, 0);
+        campo.Padding = new Thickness(12, 0, 8 + botoes.Length * 38, 0);
         g.Children.Add(sp);
         return g;
     }
