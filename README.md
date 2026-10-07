@@ -116,7 +116,7 @@ Ela gera em `dist/`:
 
 - instalador Windows `.exe`;
 - instalador Linux self-extracting `.run`;
-- pacotes portáteis Windows/Linux `.tar.xz`;
+- pacote portátil Windows `.zip` e pacote portátil Linux `.tar.xz`;
 - `SHA256SUMS.txt`.
 
 O GitHub Release é disparado por uma tag `v<versão>`. A tag precisa ser igual à versão de `src/Directory.Build.props`.

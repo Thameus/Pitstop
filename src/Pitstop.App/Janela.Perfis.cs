@@ -12,9 +12,9 @@ sealed partial class Janela
 {
     static readonly (string Tipo, string Icone, string Nome, string Desc, string TituloNovo)[] Tipos =
     [
-        ("tomcat", "tomcat", "Tomcat", "wars exploded dos seus projetos Maven, com build e sync", "Novo perfil Tomcat"),
+        ("tomcat", "tomcat", "Tomcat", "WARs explodidos dos projetos Maven, com Build e Sync", "Novo perfil Tomcat"),
         ("java", "java", "Aplicação Java", "classe main de um módulo Maven (desktop, serviço)", "Nova aplicação Java"),
-        ("war", "war", "Tomcat (war)", ".war pronto de um release, sem compilar", "Novo Tomcat com war pronto"),
+        ("war", "war", "Tomcat (war)", "WAR pronto de uma release, sem compilar", "Novo Tomcat com war pronto"),
         ("zip", "zip", "Pacote Java", ".zip ou .jar pronto, java -jar", "Novo pacote Java"),
         ("npm", "npm", "npm", "script do package.json (dev server)", "Novo perfil npm"),
         ("comando", "terminal", "Comando", "comando ou processo local genérico", "Novo perfil Comando"),
@@ -22,7 +22,7 @@ sealed partial class Janela
 
     static readonly Dictionary<string, string> NomeTipo = new()
     {
-        ["tomcat"] = "Tomcat", ["java"] = "app Java", ["npm"] = "npm", ["war"] = "Tomcat · war pronto", ["zip"] = "pacote Java",
+        ["tomcat"] = "Tomcat", ["java"] = "app Java", ["npm"] = "npm", ["war"] = "Tomcat · WAR pronto", ["zip"] = "pacote Java",
         ["comando"] = "Comando",
     };
 
@@ -292,8 +292,12 @@ sealed partial class Janela
 
     void MarcarSujo()
     {
-        if (preenchendo || sujo) return;
-        sujo = true;
+        if (preenchendo || atual == "") return;
+        var alterado = true;
+        try { alterado = !JsonNode.DeepEquals(Coletar(), PerfilCfg(atual)); }
+        catch { /* enquanto o usuário digita um valor incompleto, continua pendente */ }
+        if (sujo == alterado) return;
+        sujo = alterado;
         PintarSujo();
     }
 
@@ -507,7 +511,7 @@ sealed partial class Janela
             mi.Click += (_, _) => a();
             m.Items.Add(mi);
         }
-        Item("Salvar agora", SalvarComAviso, atual != "");
+        Item("Salvar agora", SalvarComAviso, atual != "" && sujo);
         Item(livre ? "Renomear perfil" : "Renomear perfil (pare antes)", () => _ = Renomear(), livre && atual != "");
         Item("Duplicar perfil", () => _ = Duplicar(), atual != "");
         Item("Recarregar do disco (F5)", Recarregar);

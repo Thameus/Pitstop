@@ -81,8 +81,8 @@ sealed partial class Janela : Window
 
         // ---- lateral
         novoBtn = Ui.BtnIco("novo", "Novo perfil", "fantasma", 18);
-        novoBtn.Width = novoBtn.Height = 34;
-        novoBtn.MinHeight = 34;
+        novoBtn.Width = novoBtn.Height = 36;
+        novoBtn.MinHeight = 36;
         novoBtn.Click += (_, _) => MenuNovo(novoBtn);
         temaBtn = Ui.BtnIco("lua", "Mudar tema (claro/escuro)", "fantasma", 18);
         temaBtn.Click += (_, _) => AlternarTema();
@@ -90,18 +90,19 @@ sealed partial class Janela : Window
         ajustesBtn.Click += (_, _) => Assistente.Abrir(bandeja, primeiraVez: false);
 
         // ---- cabeçalho
-        salvarBtn = Ui.Btn("Salvar").Dica("Ctrl+S");
+        salvarBtn = Ui.Btn("Salvar").Dica("Salvar alterações (Ctrl+S)");
+        salvarBtn.IsVisible = false;
         salvarBtn.Res(Button.BorderBrushProperty, "Acc").Res(Button.ForegroundProperty, "AccTxt");
         salvarBtn.Click += (_, _) => SalvarComAviso();
         iniciarBtn = Ui.Btn("Iniciar", "pri", "play", "AccFg");
         depurarBtn = Ui.Btn("Depurar", "", "debug");
         pararBtn = Ui.Btn("", "pri");
         pararBtn.Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Icones.Criar("stop", 16, "AccFg"), pararTxt } };
-        reiniciarBtn = Ui.Btn("Reiniciar", "", "reiniciar").Dica("Para e sobe de novo no mesmo modo (debug continua debug)");
-        buildBtn = Ui.Btn("Build", "", "build");
-        syncBtn = Ui.Btn("Sync", "", "sync").Dica("Copia estáticos (JSP/JS/CSS) e target/classes para a pasta explodida");
+        reiniciarBtn = Ui.Btn("Reiniciar", "", "reiniciar").Dica("Parar e iniciar novamente no mesmo modo");
+        buildBtn = Ui.Btn("Build", "", "build").Dica("Compilar e atualizar os artefatos");
+        syncBtn = Ui.Btn("Sync", "", "sync").Dica("Sincronizar arquivos alterados com o Tomcat");
         abrirBtn = Ui.BtnIco("abrir", "Abrir no navegador");
-        terminalBtn = Ui.BtnIco("terminal", "Abrir terminal aqui");
+        terminalBtn = Ui.BtnIco("terminal", "Abrir terminal na pasta deste perfil");
         maisBtn = Ui.BtnIco("mais", "Mais ações", "fantasma", 18);
         maisBtn.Click += (_, _) => MenuMais();
         foreach (var (b, a) in new[] { (iniciarBtn, "start"), (depurarBtn, "debug"), (pararBtn, "stop"), (reiniciarBtn, "reiniciar"),
@@ -227,7 +228,7 @@ sealed partial class Janela : Window
 
         var acoes = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         var sep = new Border { Width = 1, Height = 24, Margin = new Thickness(4, 8, 12, 8), VerticalAlignment = VerticalAlignment.Top }.Res(Border.BackgroundProperty, "Line");
-        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, sep, buildBtn, syncBtn, abrirBtn, terminalBtn, maisBtn })
+        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, buildBtn, syncBtn, sep, abrirBtn, terminalBtn, maisBtn })
         {
             if (b != sep) b.Margin = new Thickness(0, 0, 8, 8);
             acoes.Children.Add(b);
@@ -437,7 +438,12 @@ sealed partial class Janela : Window
                 ? new("debug", "debug", "Debug · porta " + st.PortaDebug, Rodando: true)
                 : new("noar", "no ar", "No ar · subiu em " + Dur(e.Pronto.Value - e.Desde), Rodando: true);
         }
-        if (st.EmUso) return new("noar", "fora", st.Tipo == "java" ? "Rodando fora desta janela" : "Porta " + st.Porta + " em uso fora desta janela", Rodando: true);
+        if (st.EmUso)
+        {
+            if (st.Tipo is "java" or "comando")
+                return new("externo", "externo", "Executando externamente", Rodando: true);
+            return new("portaocupada", "porta ocupada", "Porta " + st.Porta + " ocupada por outro processo", Rodando: true);
+        }
         var u = st.Ultimo;
         if (u != null && u.Tipo != "build" && u.Parado == false) return new("erro", "caiu", "Caiu · código " + u.Codigo);
         return new("parado", "parado", u is { Tipo: "build", Ok: false } && u.Cancelado != true ? "Parado · último build falhou" : "Parado");

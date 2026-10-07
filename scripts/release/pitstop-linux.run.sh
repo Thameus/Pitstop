@@ -33,6 +33,20 @@ download_text() {
   else return 1
   fi
 }
+hash_file() {
+  alg="$1"; file="$2"
+  if command -v "${alg}sum" >/dev/null 2>&1; then "${alg}sum" "$file" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then openssl dgst "-$alg" "$file" | awk '{print $NF}'
+  else echo "é necessário ${alg}sum ou openssl para verificar downloads." >&2; return 1
+  fi
+}
+verify_hash() {
+  alg="$1"; file="$2"; expected="$3"; label="$4"
+  [ -n "$expected" ] || { echo "checksum do $label não encontrado." >&2; exit 1; }
+  actual=$(hash_file "$alg" "$file") || exit 1
+  [ "$(printf '%s' "$expected" | tr 'A-F' 'a-f')" = "$(printf '%s' "$actual" | tr 'A-F' 'a-f')" ] ||
+    { echo "checksum do $label não confere." >&2; exit 1; }
+}
 set_env() {
   key="$1"; val="$2"
   [ -n "$val" ] || return 0
@@ -119,11 +133,8 @@ if [ -z "$JDK_HOME" ] && ask "  Baixar Eclipse Temurin JDK 21 portátil?" n; the
   fi
   [ -n "$jdk_url" ] || { echo 'não foi possível descobrir a URL do Eclipse Temurin.' >&2; exit 1; }
   download "$jdk_url" "$jdk"
-  command -v sha256sum >/dev/null 2>&1 || { echo 'sha256sum é necessário para verificar o Eclipse Temurin.' >&2; exit 1; }
   expected=$(download_text "$jdk_url.sha256.txt" | grep -Eo '[0-9a-fA-F]{64}' | head -n 1)
-  [ -n "$expected" ] || { echo 'checksum do Eclipse Temurin não encontrado.' >&2; exit 1; }
-  actual=$(sha256sum "$jdk" | awk '{print $1}')
-  [ "$expected" = "$actual" ] || { echo 'checksum do Eclipse Temurin não confere.' >&2; exit 1; }
+  verify_hash sha256 "$jdk" "$expected" 'Eclipse Temurin'
   JDK_HOME="$TOOLS/jdk-21"
   extract_one "$jdk" "$JDK_HOME" gz
 fi
@@ -135,11 +146,8 @@ if [ -z "$MAVEN_HOME" ] && ask "  Baixar Apache Maven 3.10.0 portátil?" n; then
   mvn="$TMP/maven.tar.gz"
   mvn_url='https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.tar.gz'
   download "$mvn_url" "$mvn"
-  if command -v sha512sum >/dev/null 2>&1; then
-    expected=$(download_text "$mvn_url.sha512" | grep -Eo '[0-9a-fA-F]{128}' | head -n 1)
-    actual=$(sha512sum "$mvn" | awk '{print $1}')
-    [ "$expected" = "$actual" ] || { echo 'checksum do Maven não confere.' >&2; exit 1; }
-  fi
+  expected=$(download_text "$mvn_url.sha512" | grep -Eo '[0-9a-fA-F]{128}' | head -n 1)
+  verify_hash sha512 "$mvn" "$expected" Maven
   MAVEN_HOME="$TOOLS/maven"
   extract_one "$mvn" "$MAVEN_HOME" gz
 fi
@@ -161,11 +169,8 @@ if [ -z "$TOMCAT_HOME" ]; then
     tfile="$TMP/tomcat.tar.gz"
     turl="https://dlcdn.apache.org/tomcat/tomcat-$tmajor/v$tver/bin/apache-tomcat-$tver.tar.gz"
     download "$turl" "$tfile"
-    if command -v sha512sum >/dev/null 2>&1; then
-      expected=$(download_text "$turl.sha512" | grep -Eo '[0-9a-fA-F]{128}' | head -n 1)
-      actual=$(sha512sum "$tfile" | awk '{print $1}')
-      [ "$expected" = "$actual" ] || { echo 'checksum do Tomcat não confere.' >&2; exit 1; }
-    fi
+    expected=$(download_text "$turl.sha512" | grep -Eo '[0-9a-fA-F]{128}' | head -n 1)
+    verify_hash sha512 "$tfile" "$expected" Tomcat
     TOMCAT_HOME="$TOOLS/tomcat-$tmajor"
     extract_one "$tfile" "$TOMCAT_HOME" gz
   fi
@@ -180,11 +185,8 @@ if [ -z "$NODE_HOME" ] && ask "  Baixar Node.js LTS portátil?" n; then
   nurl="https://nodejs.org/dist/$nver/$nname"
   nfile="$TMP/node.tar.xz"
   download "$nurl" "$nfile"
-  if command -v sha256sum >/dev/null 2>&1; then
-    expected=$(download_text "https://nodejs.org/dist/$nver/SHASUMS256.txt" | awk -v f="$nname" '$2 == f { print $1; exit }')
-    actual=$(sha256sum "$nfile" | awk '{print $1}')
-    [ "$expected" = "$actual" ] || { echo 'checksum do Node.js não confere.' >&2; exit 1; }
-  fi
+  expected=$(download_text "https://nodejs.org/dist/$nver/SHASUMS256.txt" | awk -v f="$nname" '$2 == f { print $1; exit }')
+  verify_hash sha256 "$nfile" "$expected" Node.js
   NODE_HOME="$TOOLS/node"
   extract_one "$nfile" "$NODE_HOME" xz
 fi

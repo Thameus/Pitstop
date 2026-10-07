@@ -34,7 +34,7 @@ sealed class Bandeja
     string estadoGeral = "ocupado";
     string assinaturaMenu = "";
 
-    static readonly string[] Prioridade = ["parado", "noar", "debug", "ocupado"];
+    static readonly string[] Prioridade = ["parado", "externo", "noar", "debug", "portaocupada", "ocupado"];
 
     public Bandeja(App app, IClassicDesktopStyleApplicationLifetime vida)
     {
@@ -123,7 +123,7 @@ sealed class Bandeja
             if (e.Tipo == "build" || e.Pronto == null) return "ocupado";
             return e.Tipo == "debug" ? "debug" : "noar";
         }
-        return p.EmUso ? "noar" : "parado";
+        return p.EmUso ? (p.Tipo is "java" or "comando" ? "externo" : "portaocupada") : "parado";
     }
 
     static string TextoEstado(StatusPerfil p)
@@ -135,7 +135,7 @@ sealed class Bandeja
             if (e.Pronto == null) return e.Tipo == "debug" ? "subindo (debug)" : "subindo";
             return e.Tipo == "debug" ? "debug :" + p.PortaDebug : "no ar";
         }
-        if (p.EmUso) return p.Tipo == "tomcat" ? "porta em uso" : "fora do Pitstop";
+        if (p.EmUso) return p.Tipo is "java" or "comando" ? "executando externamente" : "porta " + p.Porta + " ocupada";
         return "parado";
     }
 

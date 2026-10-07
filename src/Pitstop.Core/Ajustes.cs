@@ -62,7 +62,7 @@ public static class Ajustes
             if (i >= 0) linhas[i] = nova;
             else if (v != "") linhas.Add(nova);
         }
-        File.WriteAllText(arq, string.Join("\n", linhas) + "\n", new UTF8Encoding(false));
+        Config.GravarAtomico(arq, string.Join("\n", linhas) + "\n");
         Env.Recarregar();
     }
 

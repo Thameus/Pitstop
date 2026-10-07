@@ -44,7 +44,7 @@ svg{flex-shrink:0}
 .mono{font-family:var(--mono)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--off)}
-.k-noar{background:var(--ok)} .k-debug{background:var(--dbg)} .k-ocupado{background:var(--warn)} .k-erro{background:var(--err)} .k-parado{background:var(--off)}
+.k-noar{background:var(--ok)} .k-debug,.k-externo{background:var(--dbg)} .k-ocupado,.k-portaocupada{background:var(--warn)} .k-erro{background:var(--err)} .k-parado{background:var(--off)}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 
 /* ---------------------------------------------------------------- estrutura */
@@ -153,7 +153,11 @@ input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--acc);cur
 .chave input:checked+.trilho{background:var(--acc)}
 .chave input:checked+.trilho i{transform:translateX(12px);background:var(--acc-fg)}
 .chave input:focus-visible+.trilho{outline:2px solid var(--acc);outline-offset:2px}
-#log{flex:1;min-height:0;overflow:auto;padding:16px 20px;font:12.5px/1.6 var(--mono);color:var(--log-fg);white-space:pre-wrap;word-break:break-all}
+.logarea{flex:1;min-height:0;position:relative}
+#log{height:100%;min-height:0;overflow:auto;padding:16px 20px;font:12.5px/1.6 var(--mono);color:var(--log-fg);white-space:pre-wrap;word-break:break-all}
+.logvazio{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center;pointer-events:none}
+.logvazio b{font:600 15px/1.3 var(--sans);color:var(--fg)}
+.logvazio span{font:13px/1.5 var(--sans);color:var(--mut)}
 #log .t{color:var(--acc)} #log .e{color:var(--err)} #log .w{color:var(--warn)} #log .o{color:var(--ok)}
 
 /* projetos e artefatos */
@@ -229,9 +233,9 @@ body.semPerfis .corpo{display:none}
       <button class="btn ico fantasma" id="novoBtn" aria-label="Novo perfil" title="Novo perfil" aria-haspopup="menu" aria-expanded="false" aria-controls="novoMenu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <div class="menu" id="novoMenu" role="menu" aria-label="Tipo do perfil novo" hidden>
         <div class="rot" aria-hidden="true">Novo perfil</div>
-        <button role="menuitem" class="tipo" data-novo="tomcat"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></svg></span><span class="txt"><b>Tomcat</b><span>wars exploded dos projetos</span></span></button>
+        <button role="menuitem" class="tipo" data-novo="tomcat"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></svg></span><span class="txt"><b>Tomcat</b><span>WARs explodidos dos projetos</span></span></button>
         <button role="menuitem" class="tipo" data-novo="java"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5c0 1.5 1.5 1.5 1.5 3M12.5 3.5c0 1.5 1.5 1.5 1.5 3"/></svg></span><span class="txt"><b>Aplicação Java</b><span>classe main de um módulo Maven</span></span></button>
-        <button role="menuitem" class="tipo" data-novo="war"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/><path d="M8 6l8 4"/></svg></span><span class="txt"><b>Tomcat (war)</b><span>.war pronto de um release</span></span></button>
+        <button role="menuitem" class="tipo" data-novo="war"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/><path d="M8 6l8 4"/></svg></span><span class="txt"><b>Tomcat (war)</b><span>WAR pronto de uma release</span></span></button>
         <button role="menuitem" class="tipo" data-novo="zip"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M11 3v2h2v2h-2v2h2v2h-2"/><rect x="10" y="13" width="3" height="4" rx="1"/></svg></span><span class="txt"><b>Pacote Java</b><span>.zip ou .jar pronto, java -jar</span></span></button>
         <button role="menuitem" class="tipo" data-novo="npm"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7.5 9.5l3 2.5-3 2.5M13 15h3.5"/></svg></span><span class="txt"><b>npm</b><span>script do package.json</span></span></button>
         <button role="menuitem" class="tipo" data-novo="comando"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span><span class="txt"><b>Comando</b><span>comando ou processo local genérico</span></span></button>
@@ -301,7 +305,10 @@ body.semPerfis .corpo{display:none}
           <label class="chave"><input type="checkbox" id="auto" checked><span class="trilho" aria-hidden="true"><i></i></span>Seguir</label>
           <button class="btn fantasma" id="limpar" style="height:40px">Limpar</button>
         </div>
-        <div id="log" role="log" aria-live="off"></div>
+        <div class="logarea">
+          <div id="log" role="log" aria-live="off"></div>
+          <div id="logVazio" class="logvazio" aria-hidden="true"><b>Nenhum log ainda</b><span>Os logs deste perfil aparecerão aqui depois que ele for iniciado.</span></div>
+        </div>
       </div>
     </section>
 
@@ -339,8 +346,8 @@ body.semPerfis .corpo{display:none}
         <div class="grade">
           <label class="campo">Tomcat (CATALINA_HOME)<input class="inp" id="tomcatHome" list="tomcats"></label>
           <label class="campo">JDK (JAVA_HOME)<input class="inp" id="javaHome"></label>
-          <label class="campo">Maven do build (vazio = padrão ou mvn do PATH)<input class="inp" id="mavenHome"></label>
-          <label class="campo">conf de origem (vazio = &lt;Tomcat&gt;/conf)<input class="inp" id="confOrigem"></label>
+          <label class="campo">Maven para Build (vazio = padrão ou mvn do PATH)<input class="inp" id="mavenHome"></label>
+          <label class="campo">Configuração do Tomcat (vazio = &lt;Tomcat&gt;/conf)<input class="inp" id="confOrigem"></label>
         </div>
         <datalist id="tomcats"></datalist>
       </div>
@@ -356,8 +363,8 @@ body.semPerfis .corpo{display:none}
       </div>
       <div class="bloco">
         <h2>JVM</h2>
-        <label class="campo">VM args (CATALINA_OPTS)<input class="inp" id="vmArgs"></label>
-        <label class="campo">URL ao abrir<input class="inp" id="url"></label>
+        <label class="campo">Argumentos da VM (CATALINA_OPTS)<input class="inp" id="vmArgs"></label>
+        <label class="campo">URL do perfil<input class="inp" id="url"></label>
       </div>
     </section>
 
@@ -376,7 +383,7 @@ body.semPerfis .corpo{display:none}
       </div>
       <div class="bloco">
         <h2>Execução</h2>
-        <label class="campo">VM args<input class="inp" id="j_vmArgs" placeholder="ex.: -Xms256m -Xmx512m"></label>
+        <label class="campo">Argumentos da VM<input class="inp" id="j_vmArgs" placeholder="ex.: -Xms256m -Xmx512m"></label>
         <label class="campo">Argumentos do programa<input class="inp" id="j_args" placeholder=""></label>
         <div class="grade">
           <label class="campo">Debug (JDWP)<input class="inp num" id="j_portaDebug" type="number" min="1" max="65535" placeholder="5006"></label>
@@ -396,14 +403,14 @@ body.semPerfis .corpo{display:none}
         <div class="grade">
           <label class="campo">Jar (relativo à extração; vazio = o que tem Main-Class fora de lib)<input class="inp" id="z_jar" placeholder="ex.: app/bin/app.jar"></label>
           <label class="campo">Pasta de trabalho (relativa à extração; vazio = pasta do jar)<input class="inp" id="z_trabalho" placeholder="ex.: app/bin"></label>
-          <label class="campo">conf a copiar antes de subir (não sobrescreve; vazio = nada)<input class="inp" id="z_conf" placeholder="pasta de configuração"></label>
-          <label class="campo">Destino da conf (relativo à pasta de trabalho)<input class="inp" id="z_confDestino" placeholder="vazio = a própria pasta de trabalho"></label>
+          <label class="campo">Configuração a copiar antes de iniciar (não sobrescreve; vazio = nenhuma)<input class="inp" id="z_conf" placeholder="pasta de configuração"></label>
+          <label class="campo">Destino da configuração (relativo à pasta de trabalho)<input class="inp" id="z_confDestino" placeholder="vazio = a própria pasta de trabalho"></label>
         </div>
       </div>
       <div class="bloco">
         <h2>Execução</h2>
         <label class="campo">Java para rodar (JAVA_HOME)<input class="inp" id="z_javaHome"></label>
-        <label class="campo">VM args<input class="inp" id="z_vmArgs" placeholder="ex.: -Xms256m -Xmx512m"></label>
+        <label class="campo">Argumentos da VM<input class="inp" id="z_vmArgs" placeholder="ex.: -Xms256m -Xmx512m"></label>
         <label class="campo">Argumentos do programa<input class="inp" id="z_args"></label>
         <div class="grade">
           <label class="campo">Debug (JDWP)<input class="inp num" id="z_portaDebug" type="number" min="1" max="65535" placeholder="5006"></label>
@@ -428,7 +435,7 @@ body.semPerfis .corpo{display:none}
         <h2>Servidor</h2>
         <div class="grade">
           <label class="campo">Porta HTTP (a que o script abre)<input class="inp num" id="n_porta" type="number" min="1" max="65535" placeholder="4200"></label>
-          <label class="campo">URL ao abrir<input class="inp" id="n_url"></label>
+          <label class="campo">URL do perfil<input class="inp" id="n_url"></label>
         </div>
         <label class="campo">Pronto quando o log tiver (regex)<input class="inp" id="n_prontoLog" placeholder="vazio = Compiled successfully (Angular/webpack), ready in (Vite)"></label>
       </div>
@@ -452,12 +459,12 @@ body.semPerfis .corpo{display:none}
         <h2>Opções avançadas</h2>
         <div class="grade">
           <label class="campo">Shell<input class="inp" id="c_shell" placeholder="auto | cmd | powershell | sh | bash | custom"></label>
-          <label class="campo">Interpretador personalizado<input class="inp" id="c_shellPersonalizado" placeholder="usado quando shell = custom"></label>
+          <label class="campo">Interpretador personalizado<input class="inp" id="c_shellPersonalizado" placeholder="usado com shell = custom"></label>
           <label class="campo">Arquivo .env<input class="inp" id="c_envArquivo"></label>
           <label class="campo">Porta opcional<input class="inp num" id="c_porta" type="number" min="1" max="65535" placeholder="vazio = não observar porta"></label>
-          <label class="campo">URL opcional<input class="inp" id="c_url" placeholder="http:// ou https://"></label>
+          <label class="campo">URL do perfil (opcional)<input class="inp" id="c_url" placeholder="http:// ou https://"></label>
           <label class="campo">Pronto quando o log contiver<input class="inp" id="c_prontoLog" placeholder="vazio = pronto ao iniciar ou pela porta"></label>
-          <label class="campo">Tempo limite em segundos<input class="inp num" id="c_timeoutExecucaoSeg" type="number" min="1" placeholder="vazio = sem limite"></label>
+          <label class="campo">Tempo limite (segundos)<input class="inp num" id="c_timeoutExecucaoSeg" type="number" min="1" placeholder="vazio = sem limite"></label>
         </div>
         <label class="campo">Variáveis de ambiente extras<textarea class="inp" id="c_env" rows="4" placeholder="CHAVE=valor; uma por linha ou separadas por ;"></textarea></label>
         <label class="chk"><input type="checkbox" id="c_abrirNavegadorPronto">Abrir a URL quando o processo ficar pronto</label>
@@ -579,7 +586,7 @@ const camposZip = ['pacote', 'jar', 'trabalho', 'conf', 'confDestino', 'javaHome
 const camposComando = ['comando', 'pasta', 'shell', 'shellPersonalizado', 'envArquivo', 'porta', 'url', 'prontoLog', 'timeoutExecucaoSeg', 'env'];
 // perfil "war": Servidor igual ao Tomcat, sem a pasta de projetos (os wars vêm prontos)
 const camposWar = campos.filter(c => c !== 'projetosDir');
-const TIPOS = { tomcat: 'Tomcat', java: 'app Java', npm: 'npm', war: 'Tomcat · war pronto', zip: 'pacote Java', comando: 'Comando' };
+const TIPOS = { tomcat: 'Tomcat', java: 'app Java', npm: 'npm', war: 'Tomcat · WAR pronto', zip: 'pacote Java', comando: 'Comando' };
 const tipoDe = p => p && TIPOS[p.tipo] ? p.tipo : 'tomcat';
 function preencher() {
   const p = cfg.perfis[atual];
@@ -639,12 +646,27 @@ function escolherAba(id) {
   const validas = { java: ['log', 'app'], npm: ['log', 'npm'], tomcat: ['log', 'artefatos', 'servidor'],
                     war: ['log', 'wars', 'servidor'], zip: ['log', 'zip'], comando: ['log', 'comando'] }[tipo];
   if (!validas.includes(id)) id = 'log';
-  $$('.aba').forEach(b => b.setAttribute('aria-selected', String(b.dataset.aba === id)));
+  $$('.aba').forEach(b => {
+    const ativa = b.dataset.aba === id;
+    b.setAttribute('aria-selected', String(ativa));
+    b.tabIndex = ativa ? 0 : -1;
+  });
   $$('.painel').forEach(p => p.hidden = p.id !== 'p-' + id);
   lsSet('pit.aba', id);
   if (id === 'log') { const box = $('#log'); if ($('#auto').checked) box.scrollTop = box.scrollHeight; }
 }
 $$('.aba').forEach(b => b.onclick = () => escolherAba(b.dataset.aba));
+$('.abas').addEventListener('keydown', e => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const abas = $$('.aba').filter(b => !b.closest('[hidden]') && getComputedStyle(b).display !== 'none');
+  if (!abas.length) return;
+  const atual = Math.max(0, abas.indexOf(document.activeElement));
+  const prox = e.key === 'Home' ? 0 : e.key === 'End' ? abas.length - 1
+    : (atual + (e.key === 'ArrowRight' ? 1 : abas.length - 1)) % abas.length;
+  e.preventDefault();
+  escolherAba(abas[prox].dataset.aba);
+  abas[prox].focus();
+});
 
 // ------------------------------------------------ perfis (lateral) e estado
 function estadoDe(st) {
@@ -658,7 +680,11 @@ function estadoDe(st) {
       ? { k: 'debug', txt: 'debug', pill: 'Debug · porta ' + st.portaDebug, rodando: true }
       : { k: 'noar', txt: 'no ar', pill: 'No ar · subiu em ' + dur(e.pronto - e.desde), rodando: true };
   }
-  if (st.emUso) return { k: 'noar', txt: 'fora', pill: st.tipo === 'java' || st.tipo === 'comando' ? 'Rodando fora desta tela' : 'Porta ' + st.porta + ' em uso fora desta tela', rodando: true, fora: true };
+  if (st.emUso) {
+    if (st.tipo === 'java' || st.tipo === 'comando')
+      return { k: 'externo', txt: 'externo', pill: 'Executando externamente', rodando: true, fora: true };
+    return { k: 'portaocupada', txt: 'porta ocupada', pill: 'Porta ' + st.porta + ' ocupada por outro processo', rodando: true, fora: true };
+  }
   const u = st.ultimo;
   if (u && u.tipo !== 'build' && u.parado === false) return { k: 'erro', txt: 'caiu', pill: 'Caiu · código ' + u.codigo };
   return { k: 'parado', txt: 'parado', pill: u && u.tipo === 'build' && !u.ok && !u.cancelado ? 'Parado · último build falhou' : 'Parado' };
@@ -943,7 +969,10 @@ $('#salvar').onclick = salvarComAviso;
 $('#salvarMenu').onclick = () => { fecharMais(); salvarComAviso(); };
 addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); salvarComAviso(); }
-  if (e.key === 'Escape') { fecharMais(); fecharNovo(true); }
+  if (e.key === 'Escape') {
+    if (!$('#maisMenu').hidden) fecharMais(true);
+    else fecharNovo(true);
+  }
 });
 
 // ------------------------------------------------ log
@@ -957,6 +986,7 @@ function conectarLog() {
   if (!atual) return;
   linhas = []; novas = [];
   $('#log').innerHTML = '';
+  pintarLogVazio();
   fonte = new EventSource('/api/p/' + encodeURIComponent(atual) + '/log');
   fonte.onmessage = ev => {
     const lote = JSON.parse(ev.data);
@@ -978,17 +1008,28 @@ function classe(l) {
   return '';
 }
 function linhaEl(l) { const s = document.createElement('div'); s.className = classe(l); s.textContent = l; return s; }
+function pintarLogVazio() {
+  const box = $('#log'), vazio = $('#logVazio');
+  const filtrando = linhas.length > 0 && $('#filtro').value.trim() !== '';
+  vazio.hidden = box.childElementCount > 0;
+  if (vazio.hidden) return;
+  vazio.querySelector('b').textContent = filtrando ? 'Nenhuma linha corresponde ao filtro' : 'Nenhum log ainda';
+  vazio.querySelector('span').textContent = filtrando
+    ? 'Ajuste ou limpe o filtro para voltar a ver as linhas do log.'
+    : 'Os logs deste perfil aparecerão aqui depois que ele for iniciado.';
+}
 function desenharNovas() {
   quadro = 0;
   const f = $('#filtro').value.toLowerCase(), box = $('#log');
   const lote = f ? novas.filter(l => l.toLowerCase().indexOf(f) >= 0) : novas;
   novas = [];
-  if (!lote.length) return;
+  if (!lote.length) { pintarLogVazio(); return; }
   const frag = document.createDocumentFragment();
   lote.forEach(l => frag.appendChild(linhaEl(l)));
   box.appendChild(frag);
   let sobra = box.childElementCount - DOM_MAX;
   while (sobra-- > 0) box.removeChild(box.firstChild);
+  pintarLogVazio();
   if ($('#auto').checked) box.scrollTop = box.scrollHeight;
 }
 function repintar() {
@@ -998,6 +1039,7 @@ function repintar() {
   filtradas.forEach(l => frag.appendChild(linhaEl(l)));
   box.textContent = '';
   box.appendChild(frag);
+  pintarLogVazio();
   novas = [];
   box.scrollTop = box.scrollHeight;
 }
@@ -1103,14 +1145,20 @@ $('#novoBtn').onclick = e => {
 $$('[data-novo]').forEach(b => b.onclick = () => { fecharNovo(); criar(NOVOS[b.dataset.novo]()); });
 // setas percorrem os tipos (menu de verdade, não lista de tab)
 $('#novoMenu').addEventListener('keydown', e => {
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
   e.preventDefault();
-  const itens = $$('#novoMenu button'), i = itens.indexOf(document.activeElement);
-  itens[(i + (e.key === 'ArrowDown' ? 1 : itens.length - 1)) % itens.length].focus();
+  const itens = $$('#novoMenu button'), i = Math.max(0, itens.indexOf(document.activeElement));
+  const prox = e.key === 'Home' ? 0 : e.key === 'End' ? itens.length - 1
+    : (i + (e.key === 'ArrowDown' ? 1 : itens.length - 1)) % itens.length;
+  itens[prox].focus();
 });
 
 // menu "⋯"
-function fecharMais() { $('#maisMenu').hidden = true; $('#maisBtn').setAttribute('aria-expanded', 'false'); }
+function fecharMais(foco = false) {
+  $('#maisMenu').hidden = true;
+  $('#maisBtn').setAttribute('aria-expanded', 'false');
+  if (foco) $('#maisBtn').focus();
+}
 $('#maisBtn').onclick = e => {
   e.stopPropagation();
   const abrir = $('#maisMenu').hidden;
@@ -1118,6 +1166,14 @@ $('#maisBtn').onclick = e => {
   $('#maisBtn').setAttribute('aria-expanded', String(abrir));
   if (abrir) $('#maisMenu button').focus();
 };
+$('#maisMenu').addEventListener('keydown', e => {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  const itens = $$('#maisMenu button'), i = Math.max(0, itens.indexOf(document.activeElement));
+  const prox = e.key === 'Home' ? 0 : e.key === 'End' ? itens.length - 1
+    : (i + (e.key === 'ArrowDown' ? 1 : itens.length - 1)) % itens.length;
+  itens[prox].focus();
+});
 document.addEventListener('click', e => { if (!e.target.closest('.mais')) fecharMais(); if (!e.target.closest('.novoWrap')) fecharNovo(); });
 
 // seletor de classe: classes com main nos fontes do módulo (código principal primeiro, depois as de teste)
