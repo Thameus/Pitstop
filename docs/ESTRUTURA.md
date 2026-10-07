@@ -64,9 +64,13 @@ Aplicativo Avalonia:
 
 CLI `pit` e modo `pit ui`.
 
+### `Pitstop.Updater`
+
+Helper self-contained do atualizador integrado no Windows. É empacotado em `app/updater/`, copiado para `%TEMP%` antes de o Pitstop fechar e aplica o ZIP oficial com segunda validação de SHA-256, lock por instalação, detecção de bloqueadores, retry, rollback e reinício.
+
 ### `Pitstop.Setup.Windows`
 
-Instalador gráfico self-contained do Windows. O mesmo executável também é usado pelo atualizador em modo `--update`: ele espera o processo antigo terminar, troca os diretórios do programa e reinicia o Pitstop sem tocar nos dados locais.
+Instalador gráfico self-contained do Windows. Continua responsável pela instalação/reinstalação e mantém o modo `--update` como compatibilidade/fallback; o fluxo normal iniciado pelo aplicativo usa `Pitstop.Updater.exe`.
 
 ## `web/`
 

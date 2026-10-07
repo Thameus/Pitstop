@@ -85,6 +85,9 @@ try {
     if ($windowsEntries -notcontains "$windowsRoot/ferramentas.ps1") {
         throw 'win-x64 package missing ferramentas.ps1'
     }
+    if ($windowsEntries -notcontains "$windowsRoot/app/updater/Pitstop.Updater.exe") {
+        throw 'win-x64 package missing integrated Pitstop.Updater.exe'
+    }
     foreach ($pattern in $forbidden) {
         $bad = $windowsEntries | Where-Object { $_ -match $pattern }
         if ($bad) { throw "win-x64 package contains forbidden path: $($bad[0])" }
@@ -148,6 +151,12 @@ try {
     & (Join-Path $pkg 'app\pit.exe') status | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "packaged pit.exe status failed with exit code $LASTEXITCODE" }
 
+    $updater = Join-Path $pkg 'app\updater\Pitstop.Updater.exe'
+    & $updater --smoke-blocker
+    if ($LASTEXITCODE -ne 0) { throw "Pitstop integrated updater blocker smoke failed with exit code $LASTEXITCODE" }
+    & $updater --smoke-update --package $windowsArchive --sha256 $expectedHash[(Split-Path $windowsArchive -Leaf)]
+    if ($LASTEXITCODE -ne 0) { throw "Pitstop integrated updater apply smoke failed with exit code $LASTEXITCODE" }
+
     & $installers['win-x64'] --smoke
     if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup payload smoke failed with exit code $LASTEXITCODE" }
     & $installers['win-x64'] --smoke-install
@@ -156,6 +165,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup root-path normalization smoke failed with exit code $LASTEXITCODE" }
     & $installers['win-x64'] --smoke-update
     if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup update/preservation smoke failed with exit code $LASTEXITCODE" }
+    & $installers['win-x64'] --smoke-update-blocker
+    if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup blocker detection smoke failed with exit code $LASTEXITCODE" }
 
     # Regressão: Windows PowerShell 5.1 falha em New-Item -Force na raiz de uma unidade já existente.
     # Usa SUBST para testar uma raiz real sem tocar em C:\ ou em outros discos do usuário/runner.
@@ -212,7 +223,7 @@ try {
         if ($linuxLibs -notcontains $lib) { throw "Linux third-party version mismatch or dependency missing: $lib" }
     }
 
-    Write-Host 'PACKAGE SMOKE OK: hashes, privacy, licenses/notices, Linux modes, dependencies, Windows CLI, Setup EXE, isolated install and drive-root regression.' -ForegroundColor Green
+    Write-Host 'PACKAGE SMOKE OK: hashes, privacy, licenses/notices, Linux modes, dependencies, Windows CLI, integrated updater, Setup EXE, isolated install and drive-root regression.' -ForegroundColor Green
 }
 finally {
     $env:PIT_RAIZ = $oldRoot

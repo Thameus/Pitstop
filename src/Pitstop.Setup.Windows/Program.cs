@@ -13,6 +13,8 @@ internal static class Program
             return InstallerEngine.SmokeRootPath();
         if (args.Any(a => a.Equals("--smoke-update", StringComparison.OrdinalIgnoreCase)))
             return InstallerEngine.SmokeUpdate();
+        if (args.Any(a => a.Equals("--smoke-update-blocker", StringComparison.OrdinalIgnoreCase)))
+            return InstallerEngine.SmokeUpdateBlocker();
         if (args.Any(a => a.Equals("--update", StringComparison.OrdinalIgnoreCase)))
         {
             try

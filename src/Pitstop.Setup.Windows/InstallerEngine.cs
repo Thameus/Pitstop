@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Pitstop.Setup;
 
@@ -121,7 +123,7 @@ static class InstallerEngine
     public static int SmokeUpdate()
     {
         var destino = Path.Combine(Path.GetTempPath(), "pitstop-setup-update-smoke-" + Guid.NewGuid().ToString("N"));
-        var payload = Path.Combine(Path.GetTempPath(), "pitstop-setup-update-payload-" + Guid.NewGuid().ToString("N"));
+        var cwdAnterior = Environment.CurrentDirectory;
         try
         {
             Directory.CreateDirectory(Path.Combine(destino, "app"));
@@ -130,21 +132,69 @@ static class InstallerEngine
             File.WriteAllText(Path.Combine(destino, ".env"), "JDK_HOME=C:\\jdk-teste");
             File.WriteAllText(Path.Combine(destino, "config", "perfis.json"), "{\"perfis\":{\"teste\":{\"tipo\":\"comando\",\"comando\":\"echo ok\"}}}");
 
-            Directory.CreateDirectory(payload);
-            ExtractPayload(payload);
-            ApplyUpdatePayload(payload, destino);
+            // Regressão do updater V1: o Setup herdava <raiz>\app como diretório atual
+            // e o próprio Windows impedia Directory.Move(app, app.update-old).
+            Environment.CurrentDirectory = Path.Combine(destino, "app");
+            UpdateExisting(["--update", "--destination", destino]);
 
             if (!File.Exists(Path.Combine(destino, "app", "Pitstop.exe"))) return 12;
             if (File.Exists(Path.Combine(destino, "app", "versao-antiga.txt"))) return 13;
             if (File.ReadAllText(Path.Combine(destino, ".env")) != "JDK_HOME=C:\\jdk-teste") return 14;
             if (!File.ReadAllText(Path.Combine(destino, "config", "perfis.json")).Contains("\"teste\"")) return 15;
+            if (CaminhoDentro(Environment.CurrentDirectory, Path.Combine(destino, "app"))) return 17;
             return 0;
         }
         catch { return 16; }
         finally
         {
+            Environment.CurrentDirectory = cwdAnterior;
             try { if (Directory.Exists(destino)) Directory.Delete(destino, true); } catch { }
-            try { if (Directory.Exists(payload)) Directory.Delete(payload, true); } catch { }
+        }
+    }
+
+    public static int SmokeUpdateBlocker()
+    {
+        var destino = Path.Combine(Path.GetTempPath(), "pitstop-setup-blocker-smoke-" + Guid.NewGuid().ToString("N"));
+        Process? bloqueador = null;
+        try
+        {
+            var app = Path.Combine(destino, "app");
+            Directory.CreateDirectory(app);
+            var pit = Path.Combine(app, "pit.exe");
+            File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), pit, true);
+
+            var psi = new ProcessStartInfo(pit)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = app,
+                Arguments = "/d /c ping 127.0.0.1 -n 20 >nul"
+            };
+            bloqueador = Process.Start(psi);
+            if (bloqueador == null) return 18;
+            Thread.Sleep(300);
+
+            try
+            {
+                AguardarBloqueadoresPitstop(destino);
+                return 19;
+            }
+            catch (IOException ex)
+            {
+                return ex.Message.Contains("PID " + bloqueador.Id, StringComparison.Ordinal) ? 0 : 20;
+            }
+        }
+        catch { return 21; }
+        finally
+        {
+            try
+            {
+                if (bloqueador is { HasExited: false }) bloqueador.Kill(true);
+                bloqueador?.WaitForExit(3000);
+            }
+            catch { }
+            bloqueador?.Dispose();
+            try { if (Directory.Exists(destino)) Directory.Delete(destino, true); } catch { }
         }
     }
 
@@ -156,42 +206,153 @@ static class InstallerEngine
         var pidTxt = Argumento(args, "--parent-pid");
         var reiniciar = args.Any(a => a.Equals("--restart", StringComparison.OrdinalIgnoreCase));
 
-        if (!string.IsNullOrWhiteSpace(pidTxt) && int.TryParse(pidTxt, out var pid) && pid > 0)
-        {
-            try
-            {
-                using var pai = Process.GetProcessById(pid);
-                if (!pai.WaitForExit(120_000))
-                    throw new TimeoutException("O Pitstop não encerrou no tempo esperado.");
-            }
-            catch (ArgumentException)
-            {
-                // O processo já terminou.
-            }
-        }
+        // Defesa em profundidade: mesmo iniciado manualmente a partir de <raiz>\app,
+        // o updater sai da árvore que precisará renomear.
+        Environment.CurrentDirectory = Path.GetTempPath();
 
-        if (!Directory.Exists(destino))
-            throw new DirectoryNotFoundException("Instalação do Pitstop não encontrada: " + destino);
-
-        var tmp = Path.Combine(Path.GetTempPath(), "pitstop-update-payload-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tmp);
+        using var mutex = new Mutex(false, NomeMutexUpdate(destino));
+        var possuiMutex = false;
         try
         {
-            ExtractPayload(tmp);
-            ApplyUpdatePayload(tmp, destino);
-            UpdateInstalledAppRegistration(destino);
+            try { possuiMutex = mutex.WaitOne(0); }
+            catch (AbandonedMutexException) { possuiMutex = true; }
+            if (!possuiMutex)
+                throw new InvalidOperationException("Já existe uma atualização do Pitstop em andamento para esta instalação.");
+
+            if (!Directory.Exists(destino))
+                throw new DirectoryNotFoundException("Instalação do Pitstop não encontrada: " + destino);
+
+            // Extrai e valida a estrutura antes de esperar/parar a instalação antiga.
+            var tmp = Path.Combine(Path.GetTempPath(), "pitstop-update-payload-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tmp);
+            try
+            {
+                ExtractPayload(tmp);
+                if (!File.Exists(Path.Combine(tmp, "app", "Pitstop.exe")))
+                    throw new InvalidDataException("Payload de atualização sem app\\Pitstop.exe.");
+
+                if (!string.IsNullOrWhiteSpace(pidTxt) && int.TryParse(pidTxt, out var pid) &&
+                    pid > 0 && pid != Environment.ProcessId)
+                {
+                    try
+                    {
+                        using var pai = Process.GetProcessById(pid);
+                        if (!pai.WaitForExit(120_000))
+                            throw new TimeoutException("O Pitstop não encerrou no tempo esperado.");
+                    }
+                    catch (ArgumentException)
+                    {
+                        // O processo já terminou.
+                    }
+                }
+
+                AguardarBloqueadoresPitstop(destino);
+                ApplyUpdatePayload(tmp, destino);
+                UpdateInstalledAppRegistration(destino);
+            }
+            finally
+            {
+                try { if (Directory.Exists(tmp)) Directory.Delete(tmp, true); } catch { }
+            }
+
+            if (reiniciar)
+            {
+                var appDir = Path.Combine(destino, "app");
+                var exe = Path.Combine(appDir, "Pitstop.exe");
+                if (!File.Exists(exe)) throw new FileNotFoundException("Pitstop.exe não existe após a atualização.", exe);
+                Process.Start(new ProcessStartInfo(exe)
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = appDir
+                });
+            }
         }
         finally
         {
-            try { Directory.Delete(tmp, true); } catch { }
+            if (possuiMutex)
+            {
+                try { mutex.ReleaseMutex(); } catch { }
+            }
+        }
+    }
+
+    static string NomeMutexUpdate(string destino)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(destino).ToUpperInvariant()));
+        return "Pitstop.Update." + Convert.ToHexString(bytes.AsSpan(0, 12));
+    }
+
+    static void AguardarBloqueadoresPitstop(string destino)
+    {
+        string[] bloqueadores = [];
+        for (var tentativa = 0; tentativa < 20; tentativa++)
+        {
+            bloqueadores = ProcessosPitstopNaInstalacao(destino);
+            if (bloqueadores.Length == 0) return;
+            Thread.Sleep(250);
         }
 
-        if (reiniciar)
+        throw new IOException(
+            "Outro processo do Pitstop ainda está usando esta instalação: " +
+            string.Join(", ", bloqueadores) +
+            ". Feche-o e tente a atualização novamente.");
+    }
+
+    static string[] ProcessosPitstopNaInstalacao(string destino)
+    {
+        var lista = new List<string>();
+        foreach (var nome in new[] { "Pitstop", "pit" })
         {
-            var exe = Path.Combine(destino, "app", "Pitstop.exe");
-            if (!File.Exists(exe)) throw new FileNotFoundException("Pitstop.exe não existe após a atualização.", exe);
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+            foreach (var processo in Process.GetProcessesByName(nome))
+            {
+                using (processo)
+                {
+                    if (processo.Id == Environment.ProcessId) continue;
+                    try
+                    {
+                        var caminho = processo.MainModule?.FileName;
+                        if (!string.IsNullOrWhiteSpace(caminho) && CaminhoDentro(caminho, destino))
+                            lista.Add($"{processo.ProcessName}.exe (PID {processo.Id})");
+                    }
+                    catch
+                    {
+                        // Processos de outro usuário/sessão podem negar acesso ao módulo.
+                    }
+                }
+            }
         }
+        return lista.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    static bool CaminhoDentro(string caminho, string raiz)
+    {
+        var full = Path.GetFullPath(caminho).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var root = Path.GetFullPath(raiz).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(full, root, StringComparison.OrdinalIgnoreCase) ||
+               full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+               full.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static void IoComRetry(Action acao, string descricao, int tentativas = 20)
+    {
+        Exception? ultima = null;
+        for (var tentativa = 1; tentativa <= tentativas; tentativa++)
+        {
+            try
+            {
+                acao();
+                return;
+            }
+            catch (IOException ex) { ultima = ex; }
+            catch (UnauthorizedAccessException ex) { ultima = ex; }
+
+            if (tentativa < tentativas) Thread.Sleep(250);
+        }
+
+        throw new IOException(
+            descricao + " falhou porque o Windows ainda está usando algum arquivo. " +
+            "Feche terminais, Explorador ou outro processo aberto dentro da pasta do Pitstop e tente novamente.",
+            ultima);
     }
 
     static void UpdateInstalledAppRegistration(string destino)
@@ -237,7 +398,10 @@ static class InstallerEngine
         }
 
         foreach (var f in Directory.GetFiles(origem))
-            File.Copy(f, Path.Combine(destino, Path.GetFileName(f)), true);
+        {
+            var alvo = Path.Combine(destino, Path.GetFileName(f));
+            IoComRetry(() => File.Copy(f, alvo, true), "Copiar " + Path.GetFileName(f));
+        }
     }
 
     static void ReplaceDirectory(string fonte, string alvo)
@@ -245,34 +409,54 @@ static class InstallerEngine
         var nova = alvo + ".update-new";
         var antiga = alvo + ".update-old";
 
-        if (Directory.Exists(nova)) Directory.Delete(nova, true);
-        if (Directory.Exists(antiga)) Directory.Delete(antiga, true);
+        if (Directory.Exists(nova))
+            IoComRetry(() => Directory.Delete(nova, true), "Limpar " + Path.GetFileName(nova));
+        if (Directory.Exists(antiga))
+            IoComRetry(() => Directory.Delete(antiga, true), "Limpar " + Path.GetFileName(antiga));
+
+        // A cópia é preparada antes da troca. O período em que <alvo> não existe
+        // fica limitado aos dois renames abaixo.
         CopyDirectory(fonte, nova);
 
         var tinhaAntiga = Directory.Exists(alvo);
-        if (tinhaAntiga) Directory.Move(alvo, antiga);
+        if (tinhaAntiga)
+            IoComRetry(() => Directory.Move(alvo, antiga), "Liberar " + Path.GetFileName(alvo));
+
         try
         {
-            Directory.Move(nova, alvo);
-            if (Directory.Exists(antiga)) Directory.Delete(antiga, true);
+            IoComRetry(() => Directory.Move(nova, alvo), "Ativar " + Path.GetFileName(alvo));
         }
         catch
         {
             try
             {
-                if (Directory.Exists(alvo)) Directory.Delete(alvo, true);
-                if (tinhaAntiga && Directory.Exists(antiga)) Directory.Move(antiga, alvo);
+                if (Directory.Exists(alvo))
+                    IoComRetry(() => Directory.Delete(alvo, true), "Remover atualização incompleta", 8);
+                if (tinhaAntiga && Directory.Exists(antiga))
+                    IoComRetry(() => Directory.Move(antiga, alvo), "Restaurar versão anterior", 8);
             }
             catch { }
             throw;
         }
+
+        // A versão nova já está ativa. Resíduo antigo não deve derrubar uma
+        // atualização bem-sucedida; a próxima execução tentará limpá-lo novamente.
+        try
+        {
+            if (Directory.Exists(antiga))
+                IoComRetry(() => Directory.Delete(antiga, true), "Limpar versão anterior", 8);
+        }
+        catch { }
     }
 
     static void CopyDirectory(string origem, string destino)
     {
         Directory.CreateDirectory(destino);
         foreach (var f in Directory.GetFiles(origem))
-            File.Copy(f, Path.Combine(destino, Path.GetFileName(f)), true);
+        {
+            var alvo = Path.Combine(destino, Path.GetFileName(f));
+            IoComRetry(() => File.Copy(f, alvo, true), "Copiar " + Path.GetFileName(f));
+        }
         foreach (var d in Directory.GetDirectories(origem))
             CopyDirectory(d, Path.Combine(destino, Path.GetFileName(d)));
     }

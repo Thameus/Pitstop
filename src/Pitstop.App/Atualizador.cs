@@ -192,17 +192,40 @@ static class Atualizador
         return destino;
     }
 
-    public static void IniciarInstalador(ReleasePitstop release, string arquivo)
+    public static void IniciarAtualizador(ReleasePitstop release, string arquivo)
     {
         if (OperatingSystem.IsWindows())
         {
-            var psi = new ProcessStartInfo(arquivo) { UseShellExecute = true };
-            psi.ArgumentList.Add("--update");
+            var helperOrigem = Path.Combine(AppContext.BaseDirectory, "updater", "Pitstop.Updater.exe");
+            if (!File.Exists(helperOrigem))
+                throw new FileNotFoundException("O helper de atualização do Pitstop não foi encontrado.", helperOrigem);
+
+            var dir = Path.GetDirectoryName(arquivo)
+                ?? throw new InvalidOperationException("A pasta temporária da atualização é inválida.");
+            Directory.CreateDirectory(dir);
+            foreach (var antigo in Directory.GetFiles(dir, "Pitstop.Updater-*.exe"))
+            {
+                try { File.Delete(antigo); } catch { }
+            }
+            var helper = Path.Combine(dir, "Pitstop.Updater-" + Guid.NewGuid().ToString("N") + ".exe");
+            File.Copy(helperOrigem, helper, false);
+
+            var psi = new ProcessStartInfo(helper)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = dir
+            };
+            psi.ArgumentList.Add("--package");
+            psi.ArgumentList.Add(arquivo);
+            psi.ArgumentList.Add("--sha256");
+            psi.ArgumentList.Add(release.Sha256);
             psi.ArgumentList.Add("--destination");
             psi.ArgumentList.Add(Raiz.Dir);
             psi.ArgumentList.Add("--parent-pid");
             psi.ArgumentList.Add(Environment.ProcessId.ToString());
             psi.ArgumentList.Add("--restart");
+            psi.ArgumentList.Add("--cleanup");
+            psi.ArgumentList.Add(dir);
             if (Process.Start(psi) == null) throw new InvalidOperationException("Não foi possível iniciar o atualizador.");
             return;
         }
@@ -224,7 +247,11 @@ static class Atualizador
                 "exit \"$rc\"\n";
             File.WriteAllText(script, texto, new UTF8Encoding(false));
 
-            var psi = new ProcessStartInfo("/bin/sh") { UseShellExecute = false };
+            var psi = new ProcessStartInfo("/bin/sh")
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Path.GetTempPath()
+            };
             psi.ArgumentList.Add(script);
             if (Process.Start(psi) == null) throw new InvalidOperationException("Não foi possível iniciar o atualizador.");
             return;
@@ -242,7 +269,7 @@ static class Atualizador
     {
         if (RuntimeInformation.OSArchitecture != Architecture.X64)
             throw new PlatformNotSupportedException("Esta versão do Pitstop suporta atualização automática apenas em x64.");
-        if (OperatingSystem.IsWindows()) return $"pitstop-{versao}-setup-win-x64.exe";
+        if (OperatingSystem.IsWindows()) return $"pitstop-{versao}-win-x64.zip";
         if (OperatingSystem.IsLinux()) return $"pitstop-{versao}-linux-x64.run";
         throw new PlatformNotSupportedException("Atualização automática disponível apenas para Windows e Linux x64.");
     }

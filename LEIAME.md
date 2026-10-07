@@ -54,9 +54,9 @@ Os pacotes `.tar.xz` também ficam disponíveis para uso portátil.
 
 Abra **Ajustes → Atualizações** e clique em **Buscar atualização**. A consulta só acontece quando você pedir; o Pitstop não mantém verificação em segundo plano.
 
-Se existir uma versão nova, use **Atualizar e reiniciar**. O Pitstop:
+Se existir uma versão nova, use **Baixar e atualizar**. O Pitstop:
 
-1. baixa o instalador oficial do GitHub Release;
+1. baixa o pacote oficial do GitHub Release;
 2. confere o SHA-256 do arquivo;
 3. salva um backup pequeno de `.env` e `config/`;
 4. para os perfis em execução após sua confirmação;

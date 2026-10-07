@@ -269,13 +269,17 @@ sealed class Assistente : Window
         ReleasePitstop? release = null;
         var status = Ui.Paragrafo("A verificação só acontece quando você pedir.", 12, "Mut");
         var buscar = Ui.Btn("Buscar atualização", "fantasma");
-        var atualizar = Ui.Btn("Atualizar e reiniciar", "pri");
+        var atualizar = Ui.Btn("Baixar e atualizar", "pri");
         atualizar.IsVisible = false;
+        var progressoBar = new ProgressBar { Minimum = 0, Maximum = 100, Height = 6, IsVisible = false };
 
         buscar.Click += async (_, _) =>
         {
             buscar.IsEnabled = false;
             atualizar.IsVisible = false;
+            progressoBar.IsVisible = false;
+            progressoBar.IsIndeterminate = false;
+            progressoBar.Value = 0;
             status.Text = "Consultando a versão mais recente...";
             try
             {
@@ -308,6 +312,9 @@ sealed class Assistente : Window
             if (release == null) return;
             buscar.IsEnabled = false;
             atualizar.IsEnabled = false;
+            progressoBar.IsVisible = true;
+            progressoBar.IsIndeterminate = false;
+            progressoBar.Value = 0;
             status.Text = "Baixando Pitstop " + release.VersaoTexto + "...";
             try
             {
@@ -315,18 +322,23 @@ sealed class Assistente : Window
                 {
                     if (p.Total <= 0) return;
                     var pct = Math.Clamp((int)Math.Round(p.Recebidos * 100d / p.Total), 0, 100);
+                    progressoBar.Value = pct;
                     status.Text = "Baixando Pitstop " + release.VersaoTexto + "... " + pct + "%";
                 });
                 var pacote = await Atualizador.BaixarAsync(release, progresso);
+                progressoBar.Value = 100;
+                progressoBar.IsIndeterminate = true;
                 status.Text = "Download validado. Preparando atualização...";
                 var iniciou = await bandeja.SairParaAtualizar(() =>
                 {
                     Atualizador.CriarBackupMinimo();
-                    Atualizador.IniciarInstalador(release, pacote);
+                    Atualizador.IniciarAtualizador(release, pacote);
                 });
                 if (!iniciou)
                 {
                     status.Text = "Atualização cancelada.";
+                    progressoBar.IsVisible = false;
+                    progressoBar.IsIndeterminate = false;
                     buscar.IsEnabled = true;
                     atualizar.IsEnabled = true;
                 }
@@ -334,6 +346,8 @@ sealed class Assistente : Window
             catch (Exception ex)
             {
                 status.Text = "A atualização não foi iniciada: " + ex.Message;
+                progressoBar.IsVisible = false;
+                progressoBar.IsIndeterminate = false;
                 buscar.IsEnabled = true;
                 atualizar.IsEnabled = true;
             }
@@ -343,6 +357,7 @@ sealed class Assistente : Window
         return Ui.Bloco("Atualizações", "consulta manual ao GitHub Releases; nada roda em segundo plano", null,
             Ui.Txt("Versão instalada: " + Atualizador.VersaoAtual, 13, "Fg", FontWeight.SemiBold),
             status,
+            progressoBar,
             botoes);
     }
 
