@@ -227,6 +227,55 @@ try {
     $putResponse = $http.SendAsync($put).GetAwaiter().GetResult()
     if ([int]$putResponse.StatusCode -ne 403) { throw "PUT without X-PIT returned $([int]$putResponse.StatusCode), expected 403" }
 
+    # Navegador de pastas: exige o cabeçalho X-PIT.
+    $pastasNoHeader = $http.GetAsync("$base/api/pastas").GetAwaiter().GetResult()
+    if ([int]$pastasNoHeader.StatusCode -ne 403) { throw 'GET /api/pastas without X-PIT should return 403' }
+
+    # Diretórios: lista subpastas do diretório de teste, sem listar arquivos.
+    $subDir = Join-Path $work 'sample-folder'
+    New-Item -ItemType Directory -Force $subDir | Out-Null
+    Set-Content -Path (Join-Path $work 'sample-file.txt') -Value 'sample'
+    $reqFolders = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$base/api/pastas?dir=$([Uri]::EscapeDataString($work))")
+    $reqFolders.Headers.Add('X-PIT', '1')
+    $resFolders = $http.SendAsync($reqFolders).GetAwaiter().GetResult()
+    if ([int]$resFolders.StatusCode -ne 200) { throw 'GET /api/pastas failed' }
+    $dataFolders = $resFolders.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+    if (@($dataFolders.pastas | Where-Object nome -eq 'sample-folder').Count -ne 1) { throw 'directory not listed' }
+    if (@($dataFolders.pastas | Where-Object nome -eq 'sample-file.txt').Count -ne 0) { throw 'file listed as folder' }
+    $missingDir = Join-Path $work 'missing-directory'
+    $missingReq = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$base/api/pastas?dir=$([Uri]::EscapeDataString($missingDir))")
+    $missingReq.Headers.Add('X-PIT', '1')
+    $missingRes = $http.SendAsync($missingReq).GetAwaiter().GetResult()
+    if ([int]$missingRes.StatusCode -ne 400) { throw 'missing directory did not return 400' }
+
+    # Descoberta Maven: pasta do próprio projeto e pasta contendo projetos.
+    $mavenDir = Join-Path $work 'maven-sample'
+    New-Item -ItemType Directory -Force $mavenDir | Out-Null
+    Set-Content -Path (Join-Path $mavenDir 'pom.xml') -Encoding UTF8 -Value '<project><modelVersion>4.0.0</modelVersion><groupId>test</groupId><artifactId>maven-sample</artifactId><version>1</version><packaging>war</packaging></project>'
+    $direct = $http.GetStringAsync("$base/api/projetos?dir=$([Uri]::EscapeDataString($mavenDir))").GetAwaiter().GetResult() | ConvertFrom-Json
+    if (@($direct).Count -ne 1 -or @(@($direct)[0].artefatos).Count -ne 1) { throw 'direct Maven directory not discovered' }
+    $parent = $http.GetStringAsync("$base/api/projetos?dir=$([Uri]::EscapeDataString($work))").GetAwaiter().GetResult() | ConvertFrom-Json
+    if (@($parent | Where-Object nome -eq 'maven-sample').Count -ne 1) { throw 'Maven parent directory not discovered' }
+
+    # Cadastro guiado: Maven/navegação por pasta e npm, somente a partir da UI local.
+    $inspectNoHeader = $http.GetAsync("$base/api/inspecionar?dir=$([Uri]::EscapeDataString($mavenDir))").GetAwaiter().GetResult()
+    if ([int]$inspectNoHeader.StatusCode -ne 403) { throw 'inspection without X-PIT should return 403' }
+    $inspectReq = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$base/api/inspecionar?dir=$([Uri]::EscapeDataString($mavenDir))")
+    $inspectReq.Headers.Add('X-PIT', '1')
+    $inspectRes = $http.SendAsync($inspectReq).GetAwaiter().GetResult()
+    if ([int]$inspectRes.StatusCode -ne 200) { throw 'Maven inspection failed' }
+    $inspect = $inspectRes.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+    if ($inspect.tipo -ne 'tomcat' -or @($inspect.projetos).Count -ne 1) { throw 'Maven inspection got wrong project' }
+    $npmDir = Join-Path $work 'npm-sample'
+    New-Item -ItemType Directory -Force $npmDir | Out-Null
+    Set-Content -Path (Join-Path $npmDir 'package.json') -Value '{"name":"npm-sample","scripts":{"dev":"node main.js"}}' -Encoding UTF8
+    $npmReq = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$base/api/inspecionar?dir=$([Uri]::EscapeDataString($npmDir))")
+    $npmReq.Headers.Add('X-PIT', '1')
+    $npmRes = $http.SendAsync($npmReq).GetAwaiter().GetResult()
+    if ([int]$npmRes.StatusCode -ne 200) { throw 'npm inspection failed' }
+    $npm = $npmRes.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+    if ($npm.tipo -ne 'npm' -or $npm.script -ne 'dev') { throw 'npm inspection got wrong script' }
+
     $scriptsNoHeader = $http.GetAsync("$base/api/scripts?perfil=inexistente").GetAwaiter().GetResult()
     if ([int]$scriptsNoHeader.StatusCode -ne 403) { throw "GET /api/scripts without X-PIT returned $([int]$scriptsNoHeader.StatusCode), expected 403" }
 

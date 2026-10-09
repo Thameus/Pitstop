@@ -4,6 +4,31 @@ Pitstop é um **runner local de ambientes de desenvolvimento** para Windows e Li
 
 O mesmo núcleo pode ser usado de três formas: **aplicativo desktop + bandeja**, **interface web local** (`pit ui`) e **CLI** (`pit`).
 
+Na janela desktop e na interface web local, os campos de diretório oferecem um botão para **navegar por pastas** em vez de colar caminhos. A web usa uma API local que lista apenas diretórios, exige o cabeçalho `X-PIT: 1` e não abre o conteúdo dos arquivos. Para perfis Tomcat, a descoberta Maven aceita tanto a pasta que contém vários projetos como a pasta do próprio projeto com `pom.xml`.
+
+## Desenvolvimento Tomcat acelerado
+
+Ao criar um **novo perfil Tomcat**, o Pitstop marca **Preparar ao iniciar** e **Sync automático**. O botão **Iniciar** verifica se o último build Maven continua válido; se arquivos ou saídas mudaram, executa o comando de build configurado (inclusive goals especiais de `package`). Se nada mudou, pula o Maven. Erros de build impedem a subida; **Parar** cancela a preparação.
+
+Com o Tomcat no ar, o Pitstop observa os diretórios definidos nas regras de Sync, agrupa alterações próximas, atualiza arquivos e remove apenas arquivos anteriormente gerenciados e que não foram editados externamente. O Sync **não compila arquivos Java por conta própria**: classes compiladas externamente são sincronizadas, mas fontes Java ainda requerem preparação/build. **Build completo** e **Sincronizar agora** continuam no menu `…` e pela CLI.
+
+Na aba **Artefatos**, o usuário controla essas duas automações. **Perfis antigos não ativam a automação automaticamente**: mantêm o fluxo manual até que o usuário habilite os recursos e salve, preservando a compatibilidade com scripts legados.
+
+A seção avançada também oferece **Publicação direta**: em Tomcat 8+, o Pitstop pode montar recursos web e `target/classes` diretamente usando ResourceSets, reaproveitando JARs da montagem WAR explodida. Se os pré-requisitos falharem, usa o modo convencional; **não elimina a necessidade do build inicial** nem garante compatibilidade para todos os frameworks. `reloadable` é opcional e inicialmente desligado, devido ao custo de CPU/recarga; não é um HotSwap completo de classes estruturais via JDWP.
+
+Pode-se definir uma **URL de prontidão HTTP** em `localhost` e na própria porta do perfil; nesse caso, o estado **Pronto** aguarda a aplicação responder com HTTP 2xx/3xx. Sem URL configurada, mantém a detecção por log do Tomcat. O novo menu **+ → Detectar projeto pela pasta** identifica projetos Maven (incluindo módulos aninhados) e npm e sugere perfis.
+
+### Testes de desenvolvimento
+
+```powershell
+dotnet run --project .\tests\Pitstop.Integration\Pitstop.Integration.csproj -c Release
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\runner-web-smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
+```
+
+O último teste executa um **Maven/Tomcat simulado**, não um servidor Java real. Para validar SGF (Jasper, replicador, JARs e ciclos completos) é necessário testar seu repositório e ferramentas locais antes de liberar um release.
+
 ## O que o Pitstop executa
 
 O Pitstop trabalha com seis tipos de perfil:

@@ -104,6 +104,21 @@ public sealed class Servidor(Runner runner, int porta)
             if (get && url == "/api/cfg") { await Responder(res, 200, Config.Ler()); return; }
             if (get && url == "/api/status") { await Responder(res, 200, await runner.Status()); return; }
             if (get && url == "/api/tomcats") { await Responder(res, 200, Tomcat.Instalados()); return; }
+            // Navegador local de diretórios. Apenas nomes de pastas, nunca conteúdo dos arquivos.
+            // O cabeçalho personalizado impede consulta cross-origin direta pelo navegador.
+            if (get && url == "/api/pastas")
+            {
+                if (req.Headers["X-PIT"].ToString() != "1") { res.StatusCode = 403; return; }
+                await Responder(res, 200, ListarPastas(req.Query["dir"].ToString()));
+                return;
+            }
+            // Cadastro guiado: inspeciona a pasta indicada sem criar arquivos nem executar comandos.
+            if (get && url == "/api/inspecionar")
+            {
+                if (req.Headers["X-PIT"].ToString() != "1") { res.StatusCode = 403; return; }
+                await Responder(res, 200, InspecaoProjeto.Inspecionar(req.Query["dir"].ToString()));
+                return;
+            }
             // ?dir= pasta de projetos do perfil (vazio = PROJETOS_DIR do .env)
             if (get && url == "/api/projetos") { await Responder(res, 200, Projetos.Listar(req.Query["dir"].ToString())); return; }
             // seletor de classe da tela: classes com main nos fontes do módulo (?modulo=<pasta com pom.xml>)
@@ -230,6 +245,34 @@ public sealed class Servidor(Runner runner, int porta)
             await Task.Delay(100).ConfigureAwait(false);
             Encerrar();
         });
+    }
+
+    /// <summary>Lista até 200 subpastas para seleção na UI web, sem expor arquivos nem ler seu conteúdo.</summary>
+    static object ListarPastas(string? solicitada)
+    {
+        var inicial = JsonAux.Txt(Config.Ler(), "projetosDir")
+            ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var caminho = Path.GetFullPath(string.IsNullOrWhiteSpace(solicitada) ? inicial : solicitada.Trim());
+        if (!Directory.Exists(caminho)) throw new ErroRunner("pasta não encontrada: " + caminho);
+        var pastas = Directory.EnumerateDirectories(caminho)
+            .Take(251).Select(p => new DirectoryInfo(p))
+            .Where(p =>
+            {
+                try { return (p.Attributes & FileAttributes.ReparsePoint) == 0; }
+                catch (IOException) { return false; }
+                catch (UnauthorizedAccessException) { return false; }
+            })
+            .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return new
+        {
+            caminho,
+            pai = Directory.GetParent(caminho)?.FullName,
+            raizes = (So.Windows ? Directory.GetLogicalDrives() : ["/"])
+                .Where(Directory.Exists).ToArray(),
+            limitado = pastas.Count > 200,
+            pastas = pastas.Take(200).Select(p => new { nome = p.Name, caminho = p.FullName }).ToList(),
+        };
     }
 
     static async Task Responder(HttpResponse res, int codigo, object? corpo)

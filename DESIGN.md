@@ -187,11 +187,11 @@ Ordem visual oficial:
 
 1. **ação primária de ciclo de vida** — Iniciar ou Parar;
 2. Reiniciar / Depurar quando aplicáveis;
-3. Build / Sync quando aplicáveis;
-4. separador;
-5. abrir navegador;
-6. abrir terminal;
-7. menu `…`.
+3. separador e abrir navegador;
+4. abrir terminal quando aplicável;
+5. menu `…` com **Build completo** e **Sincronizar agora**, além das ações anteriores.
+
+Ao iniciar projetos Tomcat recém-criados, a preparação Maven e o Sync podem trabalhar automaticamente. Nunca remover suas ações de recuperação da CLI ou do menu. A interface exibe o estado de preparação durante o processo. Configurações secundárias do Tomcat (JMX/AJP, Maven individual, VM args, healthcheck e publicação direta) ficam em seções expandíveis, preservando os valores ao salvar.
 
 `Salvar` deve ficar próximo da edição/configuração e só ganhar ênfase quando houver alteração pendente.
 
@@ -224,6 +224,8 @@ O mesmo vocabulário deve ser usado em:
 - CLI quando possível.
 
 ## 8. Campos
+
+Nos campos de diretório, desktop e web devem oferecer seleção guiada por um botão de pasta; o campo continua editável para quem conhece o caminho. A interface web lista somente diretórios pela API local protegida, sem ler conteúdo de arquivos. Arquivos WAR/ZIP/JAR são campos de arquivo e não devem receber o seletor de diretórios.
 
 Estrutura padrão:
 

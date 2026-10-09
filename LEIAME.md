@@ -88,6 +88,16 @@ Ferramentas adicionais só são necessárias para os perfis que as usam:
 | npm | Node.js |
 | Comando | apenas o shell/comando usado |
 
+## Iniciar rápido e trabalhar sem Sync manual
+
+Na janela ou interface web, clique **+ → Detectar projeto pela pasta** para escolher um projeto Maven ou npm. Na web, use os ícones de pasta para navegar pelos diretórios locais em vez de copiar caminhos.
+
+Novos perfis **Tomcat de projeto** têm opções de **Preparar ao iniciar** e **Sync automático**. Na primeira vez, o Pitstop prepara o projeto com o comando Maven configurado. Nas próximas, pode reaproveitar a preparação se entradas e saídas continuarem iguais. Um erro de build impede a subida; durante o build, **Parar** cancela a operação.
+
+Enquanto o Tomcat estiver no ar, o Sync observa as fontes configuradas e sincroniza recursos sem botão manual. Classes Java precisam ser compiladas por Maven/IDE para aparecerem em `target/classes`. **Build completo** e **Sincronizar agora** estão no menu `…`. Perfis Tomcat antigos continuam no modo manual até você habilitar as opções na aba Artefatos.
+
+Em opções avançadas há o modo **Publicação direta**, que utiliza as classes e arquivos da pasta de origem quando o Tomcat suportar. É experimental em projetos complexos: usa uma montagem WAR anterior para as bibliotecas e volta ao modo convencional se os requisitos não forem encontrados. A recarga automática do contexto é opcional; pode aumentar o consumo de CPU e reiniciar a aplicação ao mudar classes. A URL opcional de prontidão espera uma resposta HTTP local para marcar a aplicação como pronta.
+
 ## Primeiros passos
 
 1. Abra o Pitstop.

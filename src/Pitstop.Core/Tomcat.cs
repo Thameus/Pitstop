@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace Pitstop;
 
-public sealed record Publicado(string Contexto, string DocBase);
+public sealed record Publicado(string Contexto, string DocBase, string Modo = "convencional");
 
 /// <summary>
 /// Mesmo mecanismo da Run Configuration Tomcat do IntelliJ: um CATALINA_BASE por perfil, um XML de contexto
@@ -30,6 +30,18 @@ public static class Tomcat
             if (melhor == null || t > data) { melhor = dir; data = t; }
         }
         return melhor;
+    }
+
+    /// <summary>Healthcheck sempre na mesma porta HTTP do Tomcat e apenas em loopback.</summary>
+    public static Uri? ValidarProntoUrl(Perfil p)
+    {
+        if (string.IsNullOrWhiteSpace(p.ProntoUrl)) return null;
+        if (!Uri.TryCreate(p.ProntoUrl, UriKind.Absolute, out var url) ||
+            url.Scheme != Uri.UriSchemeHttp ||
+            (url.Host != "localhost" && url.Host != "127.0.0.1") ||
+            url.Port != p.Porta || url.UserInfo != "")
+            throw new ErroRunner("URL de prontidão deve ser HTTP no localhost e na porta " + p.Porta);
+        return url;
     }
 
     static string NomeArquivoContexto(string ctx)
@@ -97,9 +109,21 @@ public static class Tomcat
             var docBase = ResolverDocBase(a) ?? throw new ErroRunner(a.War != null
                 ? "war de " + a.Contexto + " ainda não extraído: " + a.War + " (Iniciar ou Build extraem)"
                 : "pasta explodida não encontrada para " + a.Contexto + " (rode o build)");
-            File.WriteAllText(Path.Combine(ctxDir, NomeArquivoContexto(a.Contexto)),
-                "<Context path=\"" + XmlAttr(a.Contexto) + "\" antiResourceLocking=\"false\" docBase=\"" + XmlAttr(docBase) + "\" />\n");
-            return new Publicado(a.Contexto, docBase);
+            var xmlCtx = "<Context path=\"" + XmlAttr(a.Contexto) + "\" antiResourceLocking=\"false\" docBase=\"" + XmlAttr(docBase) + "\" reloadable=\"" + (p.ReloadAutomatico ? "true" : "false") + "\" />\n";
+            var modo = "convencional";
+            var publicado = docBase;
+            if (p.PublicacaoDireta && !p.EhWar)
+            {
+                if (TomcatDireto.Tentar(p, a, docBase, out var direto, out var web, out var motivo))
+                {
+                    xmlCtx = direto;
+                    publicado = web;
+                    modo = "direto (Resources)";
+                }
+                else modo = "convencional (fallback: " + motivo + ")";
+            }
+            File.WriteAllText(Path.Combine(ctxDir, NomeArquivoContexto(a.Contexto)), xmlCtx);
+            return new Publicado(a.Contexto, publicado, modo);
         }).ToList();
     }
 

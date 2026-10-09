@@ -228,7 +228,7 @@ sealed partial class Janela : Window
 
         var acoes = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         var sep = new Border { Width = 1, Height = 24, Margin = new Thickness(4, 8, 12, 8), VerticalAlignment = VerticalAlignment.Top }.Res(Border.BackgroundProperty, "Line");
-        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, buildBtn, syncBtn, sep, abrirBtn, terminalBtn, maisBtn })
+        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, sep, abrirBtn, terminalBtn, maisBtn })
         {
             if (b != sep) b.Margin = new Thickness(0, 0, 8, 8);
             acoes.Children.Add(b);

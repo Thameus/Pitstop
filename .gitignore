@@ -5,6 +5,8 @@ bases/
 dist/
 src/**/bin/
 src/**/obj/
+tests/**/bin/
+tests/**/obj/
 config/perfis.json
 config/perfis.json.bak
 config/perfis.json.tmp-*
