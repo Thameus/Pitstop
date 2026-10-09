@@ -26,6 +26,9 @@ public sealed class Execucao
     public int? PortaPronto { get; init; }
     public bool PortaOcupadaAntes { get; init; }
     public string? AbrirUrlAoPronto { get; init; }
+    public ObservadorSync? SyncWatcher { get; set; }
+    public Uri? ProntidaoHttp { get; init; }
+    public int SondaIniciada;
 }
 
 /// <summary>Resultado da última execução encerrada (status/tray: balão de pronto, caiu, build ok/falhou).</summary>
@@ -86,11 +89,14 @@ public sealed class ResultadoAcao
 public sealed class Runner
 {
     public LogHub Logs { get; } = new();
+    static readonly HttpClient ClienteProntidao = new(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(2) };
 
     readonly object trava = new();
     readonly Dictionary<string, Execucao> estado = new();
     readonly Dictionary<string, Reserva> reservas = new();
     readonly Dictionary<string, Ultimo> ultimos = new();
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> syncTravas = new();
     readonly Dictionary<string, LogArquivoComando> arquivosLogComando = new();
     /// <summary>Reinício em andamento (parar + subir): cobre o intervalo em que o perfil não tem processo nem reserva.</summary>
     readonly Dictionary<string, Reserva> reinicios = new();
@@ -209,13 +215,48 @@ public sealed class Runner
             }
             // porta aberta não é deploy pronto: "Server startup in"/prontoLog marca o fim da subida.
             if (reg != null && reg.Child == child && reg.Pronto == null && Casa(reg.ProntoRe, l))
-                MarcarPronto(nome, reg);
+            {
+                if (reg.ProntidaoHttp is { } endereco)
+                {
+                    if (Interlocked.Exchange(ref reg.SondaIniciada, 1) == 0)
+                        _ = ObservarHttpPronto(nome, reg, endereco);
+                }
+                else MarcarPronto(nome, reg);
+            }
             Log(nome, l);
         }
         child.OutputDataReceived += (_, e) => Sai(e.Data);
         child.ErrorDataReceived += (_, e) => Sai(e.Data);
         child.BeginOutputReadLine();
         child.BeginErrorReadLine();
+    }
+
+    /// <summary>O log de startup confirma o Tomcat, mas a aplicação pode demorar para responder.</summary>
+    async Task ObservarHttpPronto(string nome, Execucao reg, Uri url)
+    {
+        var inicio = Agora.Ms;
+        var avisou = false;
+        while (Em(nome) == reg && reg.Pronto == null)
+        {
+            try
+            {
+                using var resposta = await ClienteProntidao.GetAsync(url).ConfigureAwait(false);
+                if ((int)resposta.StatusCode is >= 200 and < 400)
+                {
+                    Log(nome, "[pit] aplicação respondeu HTTP " + (int)resposta.StatusCode +
+                        " em " + Agora.Duracao(Agora.Ms - inicio));
+                    MarcarPronto(nome, reg);
+                    return;
+                }
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+            if (!avisou && Agora.Ms - inicio > 30000)
+            {
+                avisou = true;
+                Log(nome, "[pit] AVISO Tomcat iniciado, aguardando aplicação em " + url);
+            }
+            await Task.Delay(1000).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Registra a execução do perfil, encaminha a saída e devolve o código de saída quando terminar.</summary>
@@ -261,6 +302,7 @@ public sealed class Runner
                 if (estado.GetValueOrDefault(nome)?.Child == child) estado.Remove(nome);
                 if (comando && arquivosLogComando.Remove(nome, out var arq)) arquivo = arq;
             }
+            reg.SyncWatcher?.Dispose();
             arquivo?.Dispose();
             if (reg.ScriptTemporario != null) ComandoApp.ApagarScript(reg.ScriptTemporario);
             return code;
@@ -467,6 +509,46 @@ public sealed class Runner
                 });
                 return;
             }
+            // Projeto Maven: Iniciar verifica a validade do último build e só executa Maven quando necessário.
+            // O fluxo é assíncrono para a interface continuar responsiva durante o package.
+            if (!p.EhWar && p.PrepararAoIniciar && !semCompilar && p.Artefatos.Count > 0)
+            {
+                Maven.Validar(p);
+                segundoPlano = true;
+                var inicio = Agora.Ms;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        Log(nome, "[pit] verificando alterações e artefatos do projeto...");
+                        if (!PreparacaoTomcat.Atualizado(p))
+                        {
+                            Log(nome, "[pit] preparando Maven (build completo configurado, com tarefas especiais)...");
+                            PreparacaoTomcat.Invalidar(p);
+                            await BuildArtefatos(nome, res, false).ConfigureAwait(false);
+                            ChecarCancelado(res, "subida cancelada após Maven");
+                            try { PreparacaoTomcat.Registrar(p); }
+                            catch (Exception ex) { Log(nome, "[pit] AVISO cache do build não gravado: " + ex.Message); }
+                        }
+                        else Log(nome, "[pit] fontes e artefatos sem alterações; pulando Maven");
+                        ChecarCancelado(res, "subida cancelada");
+                        Log(nome, "[pit] preparação concluída em " + Agora.Duracao(Agora.Ms - inicio));
+                        SubirTomcat(nome, p, debug, res);
+                    }
+                    catch (Exception ex)
+                    {
+                        var cancelado = ex is ErroRunner { Cancelado: true };
+                        GravarUltimo(nome, new Ultimo
+                        {
+                            Tipo = "build", Ok = false, Cancelado = cancelado, Erro = ex.Message,
+                            Fim = Agora.Ms, Duracao = Agora.Ms - inicio,
+                        });
+                        Log(nome, "[pit] " + (cancelado ? "subida cancelada" : "ERRO preparação: " + ex.Message));
+                    }
+                    finally { Liberar(nome, res); }
+                });
+                return;
+            }
             SubirTomcat(nome, p, debug, res);
         }
         finally { if (!segundoPlano) Liberar(nome, res); }   // com o processo acoplado, estado[] passa a cobrir o perfil
@@ -474,18 +556,35 @@ public sealed class Runner
 
     void SubirTomcat(string nome, Perfil p, bool debug, Reserva res)
     {
+        var prontidao = Tomcat.ValidarProntoUrl(p);
         var pub = Tomcat.PrepararBase(p);
         Log(nome, "[pit] base " + p.Base);
-        foreach (var x in pub) Log(nome, "[pit] " + x.Contexto + " -> " + x.DocBase);
+        foreach (var x in pub) Log(nome, "[pit] " + x.Contexto + " -> " + x.DocBase + " [" + x.Modo + "]");
         Log(nome, "[pit] http " + p.Porta + " | shutdown " + p.PortaShutdown + (debug ? " | debug " + p.PortaDebug : "") +
                   (p.PortaJmx is int pj ? " | jmx " + pj : "") + (p.PortaAjp is int pa ? " | ajp " + pa : ""));
         ChecarCancelado(res, "subida cancelada");
         var child = Tomcat.Catalina(p, debug ? "jpda run" : "run", debug, redirecionar: true);
         PidArquivo.Gravar(p, child);
-        _ = Acoplar(nome, new Execucao
+        var reg = new Execucao
         {
             Child = child, Tipo = debug ? "debug" : "tomcat", Debug = debug, ProntoRe = new Regex("Server startup in"),
-        });
+            ProntidaoHttp = prontidao,
+        };
+        _ = Acoplar(nome, reg);
+        if (!p.EhWar && p.SyncAutomatico)
+        {
+            try
+            {
+                reg.SyncWatcher = new ObservadorSync(p, () =>
+                {
+                    if (Em(nome) != reg) return;
+                    try { Sync(nome); }
+                    catch (Exception ex) { Log(nome, "[pit] ERRO sync automático: " + ex.Message); }
+                });
+                Log(nome, "[pit] sync automático ativo (alterações de recursos e classes compiladas)");
+            }
+            catch (Exception ex) { Log(nome, "[pit] AVISO sync automático indisponível: " + ex.Message); }
+        }
     }
 
     // ---------------------------------------------------------------- pacotes prontos (tipos "war" e "zip")
@@ -1010,10 +1109,18 @@ public sealed class Runner
         try
         {
             await BuildArtefatos(nome, res, console).ConfigureAwait(false);
+            var publicado = Config.LerPerfil(Config.Ler(), nome);
+            if (publicado.Tipo == "tomcat")
+            {
+                try { PreparacaoTomcat.Registrar(publicado); }
+                catch (Exception ex) { Log(nome, "[pit] AVISO cache do build não gravado: " + ex.Message); }
+            }
             GravarUltimo(nome, new Ultimo { Tipo = "build", Ok = true, Codigo = 0, Fim = Agora.Ms, Duracao = Agora.Ms - t0 });
         }
         catch (Exception ex)
         {
+            var perfil = Config.LerPerfil(Config.Ler(), nome);
+            if (perfil.Tipo == "tomcat") PreparacaoTomcat.Invalidar(perfil);
             GravarUltimo(nome, new Ultimo
             {
                 Tipo = "build", Ok = false, Cancelado = ex is ErroRunner { Cancelado: true }, Erro = ex.Message, Fim = Agora.Ms, Duracao = Agora.Ms - t0,
@@ -1107,22 +1214,24 @@ public sealed class Runner
         if (!p.EhTomcat) throw new ErroRunner("sync é do Tomcat (war exploded); " +
             (p.EhComando ? "perfil Comando não tem Sync" :
              p.EhJava ? "aplicação Java roda direto do target/classes" : "o dev server do npm recarrega sozinho"));
-        var total = 0;
-        foreach (var a in p.Artefatos)
+        lock (syncTravas.GetOrAdd(nome, _ => new object()))
         {
-            var docBase = Tomcat.ResolverDocBase(a);
-            if (docBase == null) { Log(nome, "[pit] sync " + a.Contexto + ": sem pasta explodida"); continue; }
-            foreach (var s in a.Sync)
-            {
-                var falhas = new List<string>();
-                var n = Tomcat.CopiarNovos(Path.Combine(a.Repo, a.Modulo, s.De), Path.Combine(docBase, s.Para), falhas);
-                Log(nome, "[pit] sync " + a.Contexto + " " + s.De + " -> " + (s.Para == "" ? "." : s.Para) + ": " + n + " arquivo(s)" +
-                          (falhas.Count > 0 ? ", " + falhas.Count + " não copiado(s)" : ""));
-                foreach (var f in falhas.Take(10)) Log(nome, "[pit]   não copiou " + f);
-                total += n;
-            }
+            var total = 0;
+            foreach (var a in p.Artefatos)
+                foreach (var s in a.Sync)
+                {
+                    var (copiados, excluidos, falhas) = SyncTomcat.Executar(p, a, s);
+                    if (copiados > 0 || excluidos > 0 || falhas.Count > 0)
+                    {
+                        Log(nome, "[pit] sync " + a.Contexto + " " + s.De + " -> " +
+                            (s.Para == "" ? "." : s.Para) + ": " + copiados + " atualizado(s), " +
+                            excluidos + " removido(s)" + (falhas.Count > 0 ? ", " + falhas.Count + " falha(s)" : ""));
+                        foreach (var f in falhas.Take(10)) Log(nome, "[pit]   " + f);
+                    }
+                    total += copiados + excluidos;
+                }
+            return total;
         }
-        return total;
     }
 
     // ---------------------------------------------------------------- status e ações

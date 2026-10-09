@@ -90,6 +90,7 @@ h1{margin:0;font-size:30px;font-weight:600;letter-spacing:-.02em;overflow-wrap:a
 
 /* ---------------------------------------------------------------- botões */
 .acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.acoes>[data-a=build],.acoes>[data-a=sync]{display:none!important}
 .btn{height:44px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border:1px solid var(--line);border-radius:10px;background:var(--surf);color:var(--fg);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
 .btn:hover:not(:disabled){border-color:var(--mut)}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-fg);font-weight:600;padding:0 18px}
@@ -202,6 +203,20 @@ details summary{cursor:pointer;font-size:12px;color:var(--mut);width:max-content
 body.semPerfis .corpo{display:none}
 #ajDlg{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 48px);padding:24px;border:1px solid var(--line);border-radius:14px;background:var(--surf);color:var(--fg);box-shadow:var(--sombra)}
 #ajDlg::backdrop{background:var(--veu,rgba(10,9,14,.5))}
+/* navegador de pastas: seleção local sem copiar e colar caminhos */
+.pasta-field{display:flex;align-items:center;gap:6px;min-width:0}
+.pasta-field>.inp{flex:1;min-width:0}
+.pasta-field>.btn{flex-shrink:0;padding:0;width:44px}
+#pastaDlg{width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);padding:24px;border:1px solid var(--line);border-radius:14px;background:var(--surf);color:var(--fg);box-shadow:var(--sombra)}
+#pastaDlg::backdrop{background:var(--veu,rgba(10,9,14,.5))}
+.pasta-navegar{display:flex;gap:8px}
+.pasta-navegar>.inp{min-width:0;flex:1}
+.pasta-raizes{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.pasta-lista{display:flex;flex-direction:column;gap:3px;overflow:auto;max-height:45vh;min-height:130px;border:1px solid var(--line);border-radius:10px;padding:6px}
+.pasta-item{width:100%;padding:10px 12px;background:transparent;border:0;border-radius:8px;text-align:left;cursor:pointer;font:13px var(--sans)}
+.pasta-item:hover,.pasta-item:focus-visible{background:var(--soft)}
+.pasta-aviso{font-size:12px;color:var(--mut);margin:10px 0 0;overflow-wrap:anywhere}
+.pasta-aviso.erro{color:var(--err)}
 #ajCampos{display:grid;gap:14px;margin-top:4px}
 #ajCampos small{display:block;color:var(--mut);font-size:12px;margin-top:4px}
 #msg::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mut);flex-shrink:0}
@@ -233,6 +248,7 @@ body.semPerfis .corpo{display:none}
       <button class="btn ico fantasma" id="novoBtn" aria-label="Novo perfil" title="Novo perfil" aria-haspopup="menu" aria-expanded="false" aria-controls="novoMenu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <div class="menu" id="novoMenu" role="menu" aria-label="Tipo do perfil novo" hidden>
         <div class="rot" aria-hidden="true">Novo perfil</div>
+        <button role="menuitem" class="tipo" id="novoDetectar"><span class="ic">⌕</span><span class="txt"><b>Detectar projeto pela pasta</b><span>Maven, Java ou npm automaticamente</span></span></button>
         <button role="menuitem" class="tipo" data-novo="tomcat"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></svg></span><span class="txt"><b>Tomcat</b><span>WARs explodidos dos projetos</span></span></button>
         <button role="menuitem" class="tipo" data-novo="java"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16M9 3.5c0 1.5 1.5 1.5 1.5 3M12.5 3.5c0 1.5 1.5 1.5 1.5 3"/></svg></span><span class="txt"><b>Aplicação Java</b><span>classe main de um módulo Maven</span></span></button>
         <button role="menuitem" class="tipo" data-novo="war"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/><path d="M8 6l8 4"/></svg></span><span class="txt"><b>Tomcat (war)</b><span>WAR pronto de uma release</span></span></button>
@@ -277,6 +293,8 @@ body.semPerfis .corpo{display:none}
             <button class="btn ico fantasma" id="maisBtn" aria-label="Mais ações" aria-haspopup="menu" aria-expanded="false" aria-controls="maisMenu"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
             <div class="menu" id="maisMenu" role="menu" hidden>
               <button role="menuitem" id="salvarMenu">Salvar agora</button>
+              <button role="menuitem" id="buildMenu">Build completo</button>
+              <button role="menuitem" id="syncMenu">Sincronizar agora</button>
               <button role="menuitem" id="ren">Renomear perfil</button>
               <button role="menuitem" id="dup">Duplicar perfil</button>
               <button role="menuitem" id="ajustesMenu">Ajustes…</button>
@@ -325,6 +343,17 @@ body.semPerfis .corpo{display:none}
         <div class="projs" id="projs"></div>
       </div>
       <div class="bloco">
+        <h2>Desenvolvimento</h2>
+        <label class="chk"><input type="checkbox" id="p_preparar" checked>Preparar automaticamente ao Iniciar (pular Maven quando não houve mudanças)</label>
+        <label class="chk"><input type="checkbox" id="p_syncAuto" checked>Sincronizar alterações automaticamente enquanto o Tomcat estiver rodando</label>
+        <details><summary>Opções avançadas de publicação</summary>
+          <div style="display:grid;gap:10px;margin-top:12px">
+            <label class="chk"><input type="checkbox" id="p_direto">Publicação direta: recursos e classes sem copiar o WAR (usa libs da montagem anterior)</label>
+            <label class="chk"><input type="checkbox" id="p_reload">Tomcat reloadable: recarregar contexto após mudança de classes/JARs (maior uso de CPU)</label>
+          </div>
+        </details>
+      </div>
+      <div class="bloco">
         <h2>Artefatos <small>· war exploded dos projetos marcados</small></h2>
         <div id="arts"></div>
       </div>
@@ -346,25 +375,36 @@ body.semPerfis .corpo{display:none}
         <div class="grade">
           <label class="campo">Tomcat (CATALINA_HOME)<input class="inp" id="tomcatHome" list="tomcats"></label>
           <label class="campo">JDK (JAVA_HOME)<input class="inp" id="javaHome"></label>
-          <label class="campo">Maven para Build (vazio = padrão ou mvn do PATH)<input class="inp" id="mavenHome"></label>
-          <label class="campo">Configuração do Tomcat (vazio = &lt;Tomcat&gt;/conf)<input class="inp" id="confOrigem"></label>
         </div>
+        <details><summary>Ferramentas avançadas</summary>
+          <div class="grade" style="margin-top:12px">
+            <label class="campo">Maven para Build (vazio = padrão ou mvn do PATH)<input class="inp" id="mavenHome"></label>
+            <label class="campo">Configuração do Tomcat (vazio = &lt;Tomcat&gt;/conf)<input class="inp" id="confOrigem"></label>
+          </div>
+        </details>
         <datalist id="tomcats"></datalist>
       </div>
       <div class="bloco">
         <h2>Portas</h2>
-        <div class="grade g5">
-          <label class="campo">HTTP<input class="inp num" id="porta" type="number" min="1" max="65535"></label>
-          <label class="campo">Debug (JPDA)<input class="inp num" id="portaDebug" type="number" min="1" max="65535"></label>
-          <label class="campo">Shutdown<input class="inp num" id="portaShutdown" type="number" min="1" max="65535" placeholder="HTTP − 75"></label>
-          <label class="campo">JMX<input class="inp num" id="portaJmx" type="number" min="1" max="65535" placeholder="desligado"></label>
-          <label class="campo">AJP<input class="inp num" id="portaAjp" type="number" min="1" max="65535" placeholder="desligado"></label>
-        </div>
+        <label class="campo">HTTP<input class="inp num" id="porta" type="number" min="1" max="65535"></label>
+        <details><summary>Portas avançadas</summary>
+          <div class="grade" style="margin-top:12px">
+            <label class="campo">Debug (JPDA)<input class="inp num" id="portaDebug" type="number" min="1" max="65535"></label>
+            <label class="campo">Shutdown<input class="inp num" id="portaShutdown" type="number" min="1" max="65535" placeholder="HTTP − 75"></label>
+            <label class="campo">JMX<input class="inp num" id="portaJmx" type="number" min="1" max="65535" placeholder="desligado"></label>
+            <label class="campo">AJP<input class="inp num" id="portaAjp" type="number" min="1" max="65535" placeholder="desligado"></label>
+          </div>
+        </details>
       </div>
       <div class="bloco">
-        <h2>JVM</h2>
-        <label class="campo">Argumentos da VM (CATALINA_OPTS)<input class="inp" id="vmArgs"></label>
+        <h2>Aplicação</h2>
         <label class="campo">URL do perfil<input class="inp" id="url"></label>
+        <details><summary>JVM e verificação de prontidão</summary>
+          <div style="display:grid;gap:12px;margin-top:12px">
+            <label class="campo">Argumentos da VM (CATALINA_OPTS)<input class="inp" id="vmArgs"></label>
+            <label class="campo">URL de prontidão (opcional; HTTP localhost na mesma porta)<input class="inp" id="prontoUrl" placeholder="http://localhost:8080/app/health"></label>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -488,6 +528,21 @@ body.semPerfis .corpo{display:none}
     <div class="dlg-acoes"><button type="button" class="btn fantasma" id="ajNao">Cancelar</button><button type="submit" class="btn pri">Salvar</button></div>
   </form>
 </dialog>
+<dialog id="pastaDlg" aria-labelledby="pastaTit">
+  <div class="dlg-cab"><div><h2 id="pastaTit">Escolher pasta</h2><p>Explore as pastas deste computador. Nenhum arquivo será alterado.</p></div></div>
+  <div class="pasta-navegar">
+    <button type="button" class="btn" id="pastaSubir" title="Ir para a pasta acima" aria-label="Subir uma pasta">↑</button>
+    <input class="inp" id="pastaAtual" aria-label="Caminho da pasta" spellcheck="false" placeholder="Digite um caminho para navegar">
+    <button type="button" class="btn" id="pastaIr">Ir</button>
+  </div>
+  <div class="pasta-raizes" id="pastaRaizes" aria-label="Unidades do computador"></div>
+  <div class="pasta-lista" id="pastaItens" aria-label="Subpastas"></div>
+  <p class="pasta-aviso" id="pastaAviso" role="status" aria-live="polite"></p>
+  <div class="dlg-acoes">
+    <button type="button" class="btn fantasma" id="pastaCancelar">Cancelar</button>
+    <button type="button" class="btn pri" id="pastaUsar" disabled>Selecionar esta pasta</button>
+  </div>
+</dialog>
 <dialog id="dlg" aria-labelledby="dlgTit" aria-describedby="dlgTxt">
   <form id="dlgForm" novalidate>
     <div class="dlg-cab"><span class="ic" id="dlgIc" aria-hidden="true"></span><div><h2 id="dlgTit"></h2><p id="dlgTxt"></p></div></div>
@@ -527,6 +582,88 @@ function msg(t, cls) {
 const dur = ms => { const s = Math.round(ms / 1000); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm' + String(s % 60).padStart(2, '0') + 's'; };
 const base = p => (p || '').split(/[\\/]/).filter(Boolean).pop() || '';
 const versaoDe = f => (f || '').split(/[\\/]/).filter(Boolean).slice(-2, -1)[0] || '';   // .../v1.2.0/app.war -> v1.2.0
+
+const camposDePasta = ['projetosDir', 'tomcatHome', 'javaHome', 'mavenHome', 'confOrigem',
+  'j_modulo', 'j_trabalho', 'j_javaHome', 'j_javaHomeBuild', 'j_mavenHome',
+  'z_conf', 'z_javaHome', 'n_pasta', 'n_nodeHome', 'c_pasta'];
+let campoPasta = null, pastaSelecionada = null, pastaPai = null, consultaPasta = 0;
+
+function adicionarSeletorPasta(inp) {
+  if (!inp || inp.parentElement.classList.contains('pasta-field')) return;
+  const envolt = document.createElement('div');
+  envolt.className = 'pasta-field';
+  inp.parentNode.insertBefore(envolt, inp);
+  envolt.appendChild(inp);
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn ico';
+  b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+  b.title = 'Navegar pelas pastas'; b.setAttribute('aria-label', 'Escolher pasta para ' + (inp.id || inp.dataset.aj || 'este campo'));
+  b.onclick = () => abrirSeletorPasta(inp);
+  envolt.appendChild(b);
+}
+async function navegarPasta(caminho, tentarPadrao = false) {
+  const consulta = ++consultaPasta;
+  const aviso = $('#pastaAviso');
+  aviso.className = 'pasta-aviso'; aviso.textContent = 'Carregando pastas…';
+  $('#pastaUsar').disabled = true;
+  try {
+    const dados = await api('GET', '/api/pastas' + (caminho ? '?dir=' + encodeURIComponent(caminho) : ''));
+    if (consulta !== consultaPasta || !$('#pastaDlg').open) return;
+    pastaSelecionada = dados.caminho; pastaPai = dados.pai;
+    $('#pastaAtual').value = dados.caminho;
+    $('#pastaSubir').disabled = !dados.pai;
+    $('#pastaUsar').disabled = false;
+    const raizes = $('#pastaRaizes');
+    raizes.replaceChildren();
+    for (const raiz of dados.raizes || []) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn'; b.textContent = raiz;
+      b.onclick = () => navegarPasta(raiz);
+      raizes.appendChild(b);
+    }
+    const lista = $('#pastaItens');
+    lista.replaceChildren();
+    for (const item of dados.pastas || []) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pasta-item';
+      b.textContent = '📁  ' + item.nome;
+      b.title = item.caminho;
+      b.onclick = () => navegarPasta(item.caminho);
+      lista.appendChild(b);
+    }
+    aviso.textContent = dados.limitado ? 'Exibindo as primeiras 200 pastas. Digite o caminho completo para navegar para outra.'
+      : (dados.pastas || []).length ? 'Clique em uma pasta para entrar nela.' : 'Não há subpastas neste diretório.';
+  } catch (e) {
+    if (consulta !== consultaPasta || !$('#pastaDlg').open) return;
+    if (tentarPadrao && caminho) { await navegarPasta(''); return; }
+    pastaSelecionada = null;
+    aviso.className = 'pasta-aviso erro'; aviso.textContent = e.message;
+  }
+}
+function abrirSeletorPasta(inp) {
+  campoPasta = inp; pastaSelecionada = null; pastaPai = null;
+  $('#pastaDlg').showModal();
+  navegarPasta(inp.value.trim(), true);
+}
+$('#pastaDlg').addEventListener('close', () => { campoPasta = null; ++consultaPasta; });
+$('#pastaCancelar').onclick = () => $('#pastaDlg').close();
+$('#pastaIr').onclick = () => navegarPasta($('#pastaAtual').value.trim());
+$('#pastaAtual').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); navegarPasta(e.target.value.trim()); }
+});
+$('#pastaSubir').onclick = () => { if (pastaPai) navegarPasta(pastaPai); };
+$('#pastaUsar').onclick = () => {
+  if (!campoPasta || !pastaSelecionada) return;
+  const input = campoPasta, caminho = pastaSelecionada;
+  $('#pastaDlg').close();
+  if (input.value !== caminho) {
+    input.value = caminho;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  input.focus();
+};
+camposDePasta.forEach(id => adicionarSeletorPasta($('#' + id)));
 
 // ------------------------------------------------ tema (design visual do Pitstop § Cores)
 function temaEscuro() {
@@ -579,7 +716,7 @@ async function descobrir() {
   $('#projInfo').textContent = '· ' + descobertos.filter(p => p.artefatos.length).length + ' com war';
 }
 
-const campos = ['tomcatHome', 'javaHome', 'mavenHome', 'porta', 'portaDebug', 'portaJmx', 'portaShutdown', 'portaAjp', 'url', 'vmArgs', 'confOrigem', 'projetosDir'];
+const campos = ['tomcatHome', 'javaHome', 'mavenHome', 'porta', 'portaDebug', 'portaJmx', 'portaShutdown', 'portaAjp', 'url', 'prontoUrl', 'vmArgs', 'confOrigem', 'projetosDir'];
 const camposJava = ['mainClass', 'modulo', 'trabalho', 'javaHome', 'javaHomeBuild', 'mavenHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog'];
 const camposNpm = ['pasta', 'script', 'args', 'porta', 'url', 'prontoLog', 'nodeHome', 'build', 'env'];
 const camposZip = ['pacote', 'jar', 'trabalho', 'conf', 'confDestino', 'javaHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog'];
@@ -629,6 +766,10 @@ function preencher() {
     $('#javaHome').placeholder = 'vazio = ' + (cfg.javaHome || 'JAVA_HOME do sistema');
     $('#mavenHome').placeholder = 'vazio = ' + (cfg.mavenHome || 'mvn do PATH');
     $('#projetosDir').placeholder = 'vazio = ' + (cfg.projetosDir || 'defina em Ajustes');
+    $('#p_preparar').checked = p.prepararAoIniciar === true;
+    $('#p_syncAuto').checked = p.syncAutomatico === true;
+    $('#p_direto').checked = p.publicacaoDireta === true;
+    $('#p_reload').checked = p.reloadAutomatico === true;
     artsPerfil = {};
     (p.artefatos || []).forEach(a => artsPerfil[chave(a.repo, a.modulo)] = a);
     // perfil antigo sem "projetos": deduz pelos artefatos
@@ -733,6 +874,10 @@ function pintarCabecalho() {
     : (p.url || (st && st.url) || '');
   // ações conforme o estado (design visual do Pitstop § Componentes): uma primária por vez
   const livre = !est.rodando && !est.build;
+  $('#buildMenu').hidden = tipo === 'comando';
+  $('#buildMenu').disabled = !livre || (tipo === 'npm' && !p.build);
+  $('#syncMenu').hidden = tipo !== 'tomcat';
+  $('#syncMenu').disabled = !!est.build;
   $('[data-a=start]').classList.toggle('oculto', !livre);
   $('[data-a=debug]').classList.toggle('oculto', !livre);
   $('[data-a=stop]').classList.toggle('oculto', livre);
@@ -906,11 +1051,16 @@ function coletar() {
     c.autoIniciar = $('#c_autoIniciar').checked;
     return c;
   }
-  const p = {};
+  const p = { ...(cfg.perfis[atual] || {}) };
   campos.forEach(c => {
     const v = $('#' + c).value.trim();
     if (v !== '') p[c] = $('#' + c).type === 'number' ? Number(v) : v;
+    else delete p[c];
   });
+  p.prepararAoIniciar = $('#p_preparar').checked;
+  p.syncAutomatico = $('#p_syncAuto').checked;
+  p.publicacaoDireta = $('#p_direto').checked;
+  p.reloadAutomatico = $('#p_reload').checked;
   // pasta de projetos inválida (descoberta falhou): mantém o que está gravado em vez de salvar vazio
   const gravado = cfg.perfis[atual] || {};
   p.projetos = descobertaOk ? descobertos.filter(x => selProj.has(x.repo.toLowerCase())).map(x => x.repo) : (gravado.projetos || []);
@@ -967,6 +1117,8 @@ $$('.painel:not(#p-log)').forEach(p => { p.addEventListener('input', editou); p.
 function salvarComAviso() { return salvar().then(() => msg('salvo', 'on')).catch(e => msg(e.message, 'err')); }
 $('#salvar').onclick = salvarComAviso;
 $('#salvarMenu').onclick = () => { fecharMais(); salvarComAviso(); };
+$('#buildMenu').onclick = () => { fecharMais(); $('[data-a=build]').click(); };
+$('#syncMenu').onclick = () => { fecharMais(); $('[data-a=sync]').click(); };
 addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); salvarComAviso(); }
   if (e.key === 'Escape') {
@@ -1123,7 +1275,7 @@ function portaLivre(inicio) {
   return p;
 }
 const NOVOS = {
-  tomcat: () => ({ porta: portaLivre(8080), portaDebug: portaLivre(5005), projetos: [], artefatos: [] }),
+  tomcat: () => ({ porta: portaLivre(8080), portaDebug: portaLivre(5005), prepararAoIniciar: true, syncAutomatico: true, projetos: [], artefatos: [] }),
   java: () => ({ tipo: 'java', portaDebug: portaLivre(5006), compilarAntes: true }),
   npm: () => ({ tipo: 'npm', script: 'start', porta: portaLivre(4200), build: 'npm run build' }),
   war: () => ({ tipo: 'war', porta: portaLivre(8080), portaDebug: portaLivre(5005), artefatos: [] }),
@@ -1143,6 +1295,27 @@ $('#novoBtn').onclick = e => {
   if (abrir) $('#novoMenu button').focus();
 };
 $$('[data-novo]').forEach(b => b.onclick = () => { fecharNovo(); criar(NOVOS[b.dataset.novo]()); });
+$('#novoDetectar').onclick = () => {
+  fecharNovo();
+  const input = document.createElement('input');
+  input.addEventListener('change', async () => {
+    try {
+      const dado = await api('GET', '/api/inspecionar?dir=' + encodeURIComponent(input.value));
+      if (dado.tipo === 'npm') {
+        await criar({ ...NOVOS.npm(), pasta: dado.pasta, script: dado.script || 'start' }, 'Novo projeto npm', dado.nome);
+      } else if (dado.tipo === 'tomcat') {
+        const grupos = dado.projetos || [];
+        const arts = grupos.flatMap(g => (g.artefatos || []).map(a =>
+          ({ repo: a.repo, modulo: a.modulo, contexto: a.contexto, build: a.build, sync: a.sync, ativo: true })));
+        await criar({ ...NOVOS.tomcat(), projetosDir: dado.pasta,
+          projetos: grupos.map(g => g.repo), artefatos: arts }, 'Novo projeto Tomcat', dado.nome);
+      } else if (dado.tipo === 'java') {
+        await criar({ ...NOVOS.java(), modulo: dado.pasta }, 'Nova aplicação Java', dado.nome);
+      } else msg('tipo de projeto não reconhecido', 'err');
+    } catch (e) { msg('não consegui detectar o projeto: ' + e.message, 'err'); }
+  }, { once: true });
+  abrirSeletorPasta(input);
+};
 // setas percorrem os tipos (menu de verdade, não lista de tab)
 $('#novoMenu').addEventListener('keydown', e => {
   if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
@@ -1319,7 +1492,7 @@ $('#n_pasta').addEventListener('change', carregarScripts);
 // ------------------------------------------------ diálogo (design visual do Pitstop § Componentes)
 // Com campo: devolve o texto (ou null se cancelou). Sem campo: true/null. "acao" roda antes de fechar: erro
 // dela aparece no próprio diálogo, que continua aberto para corrigir.
-function dialogo({ titulo, texto, icone, rotulo, valor = '', botao, perigo = false, validar, acao }) {
+function dialogo({ titulo, texto, icone, rotulo, valor = '', botao, perigo = false, validar, acao, permitirIgual = false }) {
   return new Promise(resolve => {
     const d = $('#dlg'), inp = $('#dlgInp'), erro = $('#dlgErro'), sim = $('#dlgSim');
     const campo = rotulo != null;
@@ -1335,10 +1508,10 @@ function dialogo({ titulo, texto, icone, rotulo, valor = '', botao, perigo = fal
     // vazio ou igual ao inicial só desabilita; inválido mostra o motivo
     const checar = () => {
       if (!campo) return true;
-      const v = inp.value.trim(), e = v && v !== valor && validar ? validar(v) : '';
+      const v = inp.value.trim(), e = v && validar ? validar(v) : '';
       erro.textContent = e || '';
       inp.classList.toggle('invalido', !!e);
-      sim.disabled = !v || v === valor || !!e;
+      sim.disabled = !v || (!permitirIgual && v === valor) || !!e;
       return !sim.disabled;
     };
     inp.oninput = checar;
@@ -1385,7 +1558,7 @@ async function criar(p, titulo, sugestao = '') {
     const n = await dialogo({
       titulo: titulo || TITULO_NOVO[tipo], icone: icoTipo(tipo),
       texto: 'O nome aparece na lateral, na bandeja e no pit up <nome>.',
-      rotulo: 'Nome do perfil', valor: sugestao, botao: 'Continuar', validar: validarNome,
+      rotulo: 'Nome do perfil', valor: sugestao, botao: 'Continuar', validar: validarNome, permitirIgual: true,
     });
     if (!n) return;
     const comando = await dialogo({
@@ -1406,7 +1579,7 @@ async function criar(p, titulo, sugestao = '') {
   const n = await dialogo({
     titulo: titulo || TITULO_NOVO[tipo], icone: icoTipo(tipo),
     texto: 'O nome aparece na lateral, na bandeja e no pit up <nome>.',
-    rotulo: 'Nome do perfil', valor: sugestao, botao: 'Criar perfil', validar: validarNome,
+    rotulo: 'Nome do perfil', valor: sugestao, botao: 'Criar perfil', validar: validarNome, permitirIgual: true,
     acao: async n => {
       cfg.perfis[n] = p;
       try { cfg._versao = (await api('PUT', '/api/cfg', cfg)).versao; }
@@ -1461,6 +1634,8 @@ async function abrirAjustes() {
     if (c.tipo === 'sim') return `<label class="chk"><input type="checkbox" data-aj="${c.chave}" ${/^(1|true|sim|s)$/i.test(v) ? 'checked' : ''}>${esc(c.rotulo)}<small>${esc(c.dica)}</small></label>`;
     return `<label class="campo">${esc(c.rotulo)}<input class="inp" data-aj="${c.chave}" value="${esc(v)}" placeholder="${esc(c.padrao ? 'vazio = ' + c.padrao : 'vazio = não definido')}"><small>${esc(c.dica)}</small></label>`;
   }).join('');
+  const pastas = new Set(a.campos.filter(c => c.tipo === 'pasta').map(c => c.chave));
+  $$('#ajCampos input[data-aj]').forEach(inp => { if (pastas.has(inp.dataset.aj)) adicionarSeletorPasta(inp); });
   $('#ajErro').textContent = '';
   $('#ajDlg').showModal();
 }
@@ -1484,7 +1659,7 @@ $('#vazioAjustes').onclick = abrirAjustes;
   $('#endereco').textContent = 'v3 · ' + location.host;
   pintarTema();
   api('GET', '/api/tomcats').then(l => $('#tomcats').innerHTML = l.map(t => `<option value="${esc(t)}">`).join('')).catch(() => {});
-  try { await descobrir(); } catch (e) { /* sem pasta de projetos ainda: o perfil Tomcat avisa */ }
+  // A descoberta dos projetos acontece ao abrir um perfil Tomcat, sem bloquear os demais tipos.
   await carregar();
   api('GET', '/api/ajustes').then(a => { if (a.primeiraVez) abrirAjustes(); }).catch(() => {});
   setInterval(atualizarStatus, 3000);

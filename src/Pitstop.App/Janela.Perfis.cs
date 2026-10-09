@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 
 namespace Pitstop.App;
 
@@ -357,7 +358,7 @@ sealed partial class Janela
         "comando" => new() { ["tipo"] = "comando", ["shell"] = "auto" },
         "war" => new() { ["tipo"] = "war", ["porta"] = PortaLivre("porta", 8080), ["portaDebug"] = PortaLivre("portaDebug", 5005), ["artefatos"] = new JsonArray() },
         "zip" => new() { ["tipo"] = "zip", ["portaDebug"] = PortaLivre("portaDebug", 5006) },
-        _ => new() { ["porta"] = PortaLivre("porta", 8080), ["portaDebug"] = PortaLivre("portaDebug", 5005), ["projetos"] = new JsonArray(), ["artefatos"] = new JsonArray() },
+        _ => new() { ["porta"] = PortaLivre("porta", 8080), ["portaDebug"] = PortaLivre("portaDebug", 5005), ["prepararAoIniciar"] = true, ["syncAutomatico"] = true, ["projetos"] = new JsonArray(), ["artefatos"] = new JsonArray() },
     };
 
     // ---- caminhos pedidos ao criar (cada tipo pede só o que precisa; vazio = o padrão de Ajustes)
@@ -512,6 +513,8 @@ sealed partial class Janela
             m.Items.Add(mi);
         }
         Item("Salvar agora", SalvarComAviso, atual != "" && sujo);
+        if (TipoAtual != "comando") Item("Build completo", () => Executar("build"), livre);
+        if (TipoAtual == "tomcat") Item("Sincronizar agora", () => Executar("sync"), !est.Build);
         Item(livre ? "Renomear perfil" : "Renomear perfil (pare antes)", () => _ = Renomear(), livre && atual != "");
         Item("Duplicar perfil", () => _ = Duplicar(), atual != "");
         Item("Recarregar do disco (F5)", Recarregar);
@@ -528,6 +531,56 @@ sealed partial class Janela
     {
         var m = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
         m.Items.Add(new MenuItem { Header = Ui.Rotulo("Novo perfil"), IsEnabled = false });
+        var detectar = new MenuItem { Header = "Detectar projeto pela pasta…" };
+        detectar.Click += async (_, _) =>
+        {
+            try
+            {
+                var r = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+                {
+                    Title = "Escolha a pasta do projeto"
+                });
+                var pasta = r.FirstOrDefault()?.TryGetLocalPath();
+                if (pasta == null) return;
+                var inspecao = await Task.Run(() => InspecaoProjeto.Inspecionar(pasta));
+                var novo = NovoPerfil(inspecao.Tipo);
+                if (inspecao.Tipo == "npm")
+                {
+                    novo["pasta"] = inspecao.Pasta;
+                    novo["script"] = inspecao.Script == "" ? "start" : inspecao.Script;
+                }
+                else if (inspecao.Tipo == "java")
+                {
+                    novo["modulo"] = inspecao.Pasta;
+                    var mains = await Task.Run(() => JavaApp.ClassesMain(inspecao.Pasta));
+                    if (mains.Count > 0) novo["mainClass"] = mains[0].Classe;
+                }
+                else
+                {
+                    novo["projetosDir"] = inspecao.Pasta;
+                    novo["projetos"] = new JsonArray(inspecao.Projetos.Select(x => (JsonNode)x.Repo).ToArray());
+                    var artes = new JsonArray();
+                    foreach (var projeto in inspecao.Projetos)
+                        foreach (var a in projeto.Artefatos)
+                        {
+                            var regras = new JsonArray(a.Sync.Select(s => (JsonNode)new JsonObject
+                            {
+                                ["de"] = s.De, ["para"] = s.Para
+                            }).ToArray());
+                            artes.Add(new JsonObject
+                            {
+                                ["repo"] = a.Repo, ["modulo"] = a.Modulo, ["contexto"] = a.Contexto,
+                                ["build"] = a.Build, ["ativo"] = true, ["sync"] = regras,
+                            });
+                        }
+                    novo["artefatos"] = artes;
+                }
+                await Criar(novo, "Novo projeto identificado", inspecao.Nome, pedirCaminhos: false);
+            }
+            catch (Exception ex) { Aviso("não consegui detectar o projeto: " + ex.Message, "err"); }
+        };
+        m.Items.Add(detectar);
+        m.Items.Add(new Separator());
         foreach (var (tipo, icone, nome, desc, _) in Tipos)
         {
             var g = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
