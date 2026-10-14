@@ -142,7 +142,10 @@ try {
     foreach ($pr in @($external, $ui)) {
         if ($null -ne $pr) {
             try {
-                if (-not $pr.HasExited) { $pr.Kill($true); $pr.WaitForExit(5000) | Out-Null }
+                if (-not $pr.HasExited) {
+                    try { $pr.Kill($true) } catch { $pr.Kill() }
+                    $pr.WaitForExit(5000) | Out-Null
+                }
                 $pr.Dispose()
             } catch { }
         }

@@ -49,7 +49,10 @@ try {
     Write-Host "UI SMOKE OK: $pastas campos com seletor de pasta, cadastro, automação, modo direto e menu avançado."
 } finally {
     if ($proc -and -not $proc.HasExited) {
-        try { $proc.Kill($true); $proc.WaitForExit(3000) | Out-Null } catch {}
+        try {
+            try { $proc.Kill($true) } catch { $proc.Kill() }
+            $proc.WaitForExit(3000) | Out-Null
+        } catch {}
     }
     Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'dotnet.exe' -and $_.CommandLine -like ('*' + $temp + '*') } |
         ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {} }

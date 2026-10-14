@@ -321,7 +321,10 @@ try {
 finally {
     if ($http) { $http.Dispose() }
     if ($proc -and -not $proc.HasExited) {
-        try { $proc.Kill($true); $proc.WaitForExit(3000) | Out-Null } catch { }
+        try {
+            try { $proc.Kill($true) } catch { $proc.Kill() }
+            $proc.WaitForExit(3000) | Out-Null
+        } catch { }
     }
     if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
     $env:PIT_RAIZ = $oldRoot
