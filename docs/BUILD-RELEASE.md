@@ -42,7 +42,12 @@ O smoke usa uma raiz temporária e não deve alterar a configuração real do us
 - timeout;
 - autostart bloqueado em teste;
 - restart/stop;
-- rotação de logs.
+- rotação de logs;
+- reconhecimento de perfis iniciados por outra instância/CLI, com proteção de PID e porta;
+- integração MCP local (ferramentas, leitura de status, perfis e logs).
+
+Os cenários adicionais ficam em `tests/external-status-smoke.ps1` e `tests/mcp-smoke.ps1`,
+ambos com dados temporários, sem alterar os perfis do usuário.
 
 O smoke dos pacotes executa o helper integrado `Pitstop.Updater.exe` e também o modo legado `--smoke-update` do Setup. Ele valida troca de arquivos, detecção de bloqueadores e preservação de `.env` e `config/perfis.json`.
 
@@ -64,7 +69,7 @@ O empacotador:
 2. monta uma área `dist/stage`;
 3. copia apenas arquivos permitidos;
 4. achata os scripts de `scripts/install/` para a raiz do pacote;
-5. inclui `web/`, notices e licenças;
+5. inclui `web/`, guias para agentes (`AGENTS.md`, `CLAUDE.md`, `docs/`), notices e licenças;
 6. gera o `.zip` portátil do Windows e o `.tar.xz` portátil do Linux;
 7. gera o instalador Windows;
 8. gera o `.run` Linux;
@@ -103,7 +108,9 @@ Ele executa:
 2. setup do .NET;
 3. build Release;
 4. validação sintática dos scripts shell;
-5. smoke principal.
+5. smoke principal;
+6. reconhecimento de perfis externos (Windows/Linux);
+7. smoke MCP (Windows).
 
 CodeQL roda separadamente.
 
@@ -144,7 +151,7 @@ A versão oficial fica em:
 Exemplo:
 
 ```xml
-<Version>3.0.6</Version>
+<Version>3.0.7</Version>
 ```
 
 Fluxo:

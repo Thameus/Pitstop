@@ -232,6 +232,13 @@ Exemplo de perfil Comando:
 
 Quando `pasta` está vazia, o runner usa `PROJETOS_DIR` se ele estiver configurado **e existir**; caso contrário, usa a HOME do usuário.
 
+## Versão 3.0.7
+
+Esta versão reúne as melhorias de preparação/sincronização inteligente do Tomcat,
+a integração MCP e o reconhecimento de perfis iniciados em outra instância do Pitstop.
+A integração não precisa de um serviço MCP separado, mas cada cliente de IA precisa
+registrar a CLI como servidor MCP stdio uma vez. Veja [docs/IA-MCP.md](docs/IA-MCP.md).
+
 ## Reconhecimento de perfis iniciados fora da janela
 
 Ao iniciar um perfil pelo terminal com `pit up <perfil>`, o Pitstop registra o processo
