@@ -51,6 +51,10 @@ if [ "$ORIGEM" != "$DESTINO" ]; then
   # app/ e web/ são do programa: troca inteiro (versão nova não deixa arquivo velho para trás)
   rm -rf "$DESTINO/app" "$DESTINO/web"
   cp -R "$ORIGEM/app" "$ORIGEM/web" "$DESTINO/"
+  if [ -d "$ORIGEM/docs" ]; then
+    mkdir -p "$DESTINO/docs"
+    cp -R "$ORIGEM/docs/." "$DESTINO/docs/"
+  fi
   for f in "$ORIGEM"/* "$ORIGEM"/.env.exemplo; do
     [ -f "$f" ] && cp "$f" "$DESTINO/"
   done

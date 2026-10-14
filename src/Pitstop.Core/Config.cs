@@ -51,7 +51,17 @@ public sealed class Perfil
     public int? PortaAjp { get; init; }
     public string VmArgs { get; init; } = "";
     public string? Url { get; init; }
+    /// <summary>Endpoint localhost opcional para confirmar aplicação pronta após a subida do Tomcat.</summary>
+    public string? ProntoUrl { get; init; }
     public List<Artefato> Artefatos { get; init; } = [];
+    /// <summary>Preparação Maven automática antes de iniciar projetos Tomcat (não se aplica a WAR pronto).</summary>
+    public bool PrepararAoIniciar { get; init; }
+    /// <summary>Monitorar alterações e sincronizar arquivos durante o desenvolvimento.</summary>
+    public bool SyncAutomatico { get; init; }
+    /// <summary>Publica recursos e classes diretamente via Tomcat ResourceSets (exige artefato anterior para libs).</summary>
+    public bool PublicacaoDireta { get; init; }
+    /// <summary>Tomcat recarrega contexto quando classes/JARs mudam; tem custo de monitoramento, padrão desligado.</summary>
+    public bool ReloadAutomatico { get; init; }
 
     // aplicação Java (ex.: app desktop Swing/JavaFX)
     public string MainClass { get; init; } = "";
@@ -265,7 +275,12 @@ public static class Config
             PortaAjp = JsonAux.Num(p, "portaAjp"),
             VmArgs = JsonAux.Txt(p, "vmArgs") ?? "",
             Url = JsonAux.Txt(p, "url") ?? "http://localhost:" + porta + UrlContexto(todos),
+            ProntoUrl = JsonAux.Txt(p, "prontoUrl"),
             Artefatos = todos.Where(a => a.Ativo).ToList(),
+            PrepararAoIniciar = p["prepararAoIniciar"]?.GetValue<bool>() == true,
+            SyncAutomatico = p["syncAutomatico"]?.GetValue<bool>() == true,
+            PublicacaoDireta = p["publicacaoDireta"]?.GetValue<bool>() == true,
+            ReloadAutomatico = p["reloadAutomatico"]?.GetValue<bool>() == true,
         };
     }
 

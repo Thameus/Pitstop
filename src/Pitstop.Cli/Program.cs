@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using Pitstop;
+using Pitstop.Cli;
 
 // pit — linha de comando do Pitstop (pit.cmd no Windows, ./pit no Linux, na raiz):
 //   pit ui [porta]                      tela web em http://localhost:9999 (fechar o console para tudo)
@@ -32,6 +33,12 @@ static class Cli
         var cmd = argv.ElementAtOrDefault(0);
         var nome = argv.ElementAtOrDefault(1);
         bool Flag(string f) => argv.Contains(f);
+        if (cmd == "mcp") return await Mcp.Rodar();
+        if (cmd == "capabilities")
+        {
+            Console.WriteLine(Mcp.CatalogoJson());
+            return 0;
+        }
         var runner = new Runner();
 
         if (cmd == "ui") return await Tela(runner, int.TryParse(nome, out var pt) ? pt : Env.Num("RUNNER_PORTA", 9999));
@@ -220,5 +227,7 @@ static class Cli
           status                             perfis, NO AR/parado, docBase resolvido
           projetos                           repositórios e módulos war encontrados
           ajustes                            ajustes globais (.env) e onde ficam os arquivos
+          capabilities                       catálogo JSON de ferramentas para agentes de IA
+          mcp                                servidor MCP stdio para agentes locais (requer UI rodando)
         """);
 }

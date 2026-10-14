@@ -40,3 +40,12 @@ jobs:
       - name: Smoke
         shell: pwsh
         run: ./tests/smoke.ps1
+
+      - name: External profile recognition
+        shell: pwsh
+        run: ./tests/external-status-smoke.ps1
+
+      - name: MCP smoke (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/mcp-smoke.ps1

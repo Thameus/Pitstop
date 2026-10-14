@@ -4,6 +4,31 @@ Pitstop é um **runner local de ambientes de desenvolvimento** para Windows e Li
 
 O mesmo núcleo pode ser usado de três formas: **aplicativo desktop + bandeja**, **interface web local** (`pit ui`) e **CLI** (`pit`).
 
+Na janela desktop e na interface web local, os campos de diretório oferecem um botão para **navegar por pastas** em vez de colar caminhos. A web usa uma API local que lista apenas diretórios, exige o cabeçalho `X-PIT: 1` e não abre o conteúdo dos arquivos. Para perfis Tomcat, a descoberta Maven aceita tanto a pasta que contém vários projetos como a pasta do próprio projeto com `pom.xml`.
+
+## Desenvolvimento Tomcat acelerado
+
+Ao criar um **novo perfil Tomcat**, o Pitstop marca **Preparar ao iniciar** e **Sync automático**. O botão **Iniciar** verifica se o último build Maven continua válido; se arquivos ou saídas mudaram, executa o comando de build configurado (inclusive goals especiais de `package`). Se nada mudou, pula o Maven. Erros de build impedem a subida; **Parar** cancela a preparação.
+
+Com o Tomcat no ar, o Pitstop observa os diretórios definidos nas regras de Sync, agrupa alterações próximas, atualiza arquivos e remove apenas arquivos anteriormente gerenciados e que não foram editados externamente. O Sync **não compila arquivos Java por conta própria**: classes compiladas externamente são sincronizadas, mas fontes Java ainda requerem preparação/build. **Build completo** e **Sincronizar agora** continuam no menu `…` e pela CLI.
+
+Na aba **Artefatos**, o usuário controla essas duas automações. **Perfis antigos não ativam a automação automaticamente**: mantêm o fluxo manual até que o usuário habilite os recursos e salve, preservando a compatibilidade com scripts legados.
+
+A seção avançada também oferece **Publicação direta**: em Tomcat 8+, o Pitstop pode montar recursos web e `target/classes` diretamente usando ResourceSets, reaproveitando JARs da montagem WAR explodida. Se os pré-requisitos falharem, usa o modo convencional; **não elimina a necessidade do build inicial** nem garante compatibilidade para todos os frameworks. `reloadable` é opcional e inicialmente desligado, devido ao custo de CPU/recarga; não é um HotSwap completo de classes estruturais via JDWP.
+
+Pode-se definir uma **URL de prontidão HTTP** em `localhost` e na própria porta do perfil; nesse caso, o estado **Pronto** aguarda a aplicação responder com HTTP 2xx/3xx. Sem URL configurada, mantém a detecção por log do Tomcat. O novo menu **+ → Detectar projeto pela pasta** identifica projetos Maven (incluindo módulos aninhados) e npm e sugere perfis.
+
+### Testes de desenvolvimento
+
+```powershell
+dotnet run --project .\tests\Pitstop.Integration\Pitstop.Integration.csproj -c Release
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\runner-web-smoke.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\ui-smoke.ps1
+```
+
+O último teste executa um **Maven/Tomcat simulado**, não um servidor Java real. Para validar SGF (Jasper, replicador, JARs e ciclos completos) é necessário testar seu repositório e ferramentas locais antes de liberar um release.
+
 ## O que o Pitstop executa
 
 O Pitstop trabalha com seis tipos de perfil:
@@ -207,6 +232,36 @@ Exemplo de perfil Comando:
 
 Quando `pasta` está vazia, o runner usa `PROJETOS_DIR` se ele estiver configurado **e existir**; caso contrário, usa a HOME do usuário.
 
+## Versão 3.0.7
+
+Esta versão reúne as melhorias de preparação/sincronização inteligente do Tomcat,
+a integração MCP e o reconhecimento de perfis iniciados em outra instância do Pitstop.
+A integração não precisa de um serviço MCP separado, mas cada cliente de IA precisa
+registrar a CLI como servidor MCP stdio uma vez. Veja [docs/IA-MCP.md](docs/IA-MCP.md).
+
+## Reconhecimento de perfis iniciados fora da janela
+
+Ao iniciar um perfil pelo terminal com `pit up <perfil>`, o Pitstop registra o processo
+(PID e identidade de início) no arquivo local `pit.pid`. Outras instâncias do Pitstop,
+incluindo a janela desktop, bandeja e interface web, reconhecem esse processo como
+**iniciado externamente**, exibem seu estado e permitem parar/reiniciar pelo perfil.
+Essa informação também aparece no status retornado ao MCP.
+
+Durante o início, perfis que dependem de porta permanecem em **Iniciando externamente**
+até a porta configurada abrir; após isso aparecem como **No ar**. Processos de terceiros
+que apenas ocupam a mesma porta **não são assumidos como pertencentes ao perfil** sem
+a identidade validada: isso evita parar acidentalmente o serviço errado.
+
+Teste de regressão: `powershell -File tests/external-status-smoke.ps1`.
+
+## Integração com agentes de IA (MCP)
+
+O Pitstop oferece um servidor **MCP stdio** integrado à CLI, sem dependências ou serviço de rede adicional. Após iniciar o Pitstop pelo aplicativo desktop ou por `pit ui`, configure `pit mcp` no cliente de IA compatível com MCP. O agente passa a descobrir as ferramentas automaticamente, incluindo status, logs, gerenciamento de perfis, ações de execução/build/sync e descoberta de projetos.
+
+O comando `pit capabilities` produz o catálogo JSON das ferramentas; `AGENTS.md` e `CLAUDE.md` ajudam agentes trabalhando neste repositório. A configuração de cada computador/cliente continua necessária e a API permanece restrita a `127.0.0.1`.
+
+**Guia completo:** [docs/IA-MCP.md](docs/IA-MCP.md). **Teste isolado:** `powershell -File tests/mcp-smoke.ps1`.
+
 ## CLI
 
 Exemplos:
@@ -219,6 +274,8 @@ pit build <perfil>
 pit logs <perfil>
 pit ui
 pit ajustes
+pit capabilities
+pit mcp
 ```
 
 As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõe Build, Debug ou Sync.
@@ -241,6 +298,7 @@ As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõ
 - [DESIGN.md](DESIGN.md) — sistema visual e baseline de UI desktop/web;
 - [docs/ESTRUTURA.md](docs/ESTRUTURA.md) — organização do repositório;
 - [docs/BUILD-RELEASE.md](docs/BUILD-RELEASE.md) — build, CI, empacotamento, tags e release;
+- [docs/IA-MCP.md](docs/IA-MCP.md) — integração MCP/CLI para agentes de IA;
 - [LICENCAS.md](LICENCAS.md) — resumo das licenças redistribuídas;
 - [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — notices de terceiros.
 

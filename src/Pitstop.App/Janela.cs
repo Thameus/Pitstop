@@ -228,7 +228,7 @@ sealed partial class Janela : Window
 
         var acoes = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         var sep = new Border { Width = 1, Height = 24, Margin = new Thickness(4, 8, 12, 8), VerticalAlignment = VerticalAlignment.Top }.Res(Border.BackgroundProperty, "Line");
-        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, buildBtn, syncBtn, sep, abrirBtn, terminalBtn, maisBtn })
+        foreach (var b in new Control[] { salvarBtn, iniciarBtn, depurarBtn, pararBtn, reiniciarBtn, sep, abrirBtn, terminalBtn, maisBtn })
         {
             if (b != sep) b.Margin = new Thickness(0, 0, 8, 8);
             acoes.Children.Add(b);
@@ -431,6 +431,9 @@ sealed partial class Janela : Window
         if (st == null) return new("parado", "parado", "Parado");
         if (st.Execucao is { } e)
         {
+            if (e.Tipo == "externo") return e.Pronto == null
+                ? new("ocupado", "subindo", "Iniciando externamente…", Rodando: true)
+                : new("externo", "no ar", "No ar · iniciado pelo terminal ou outra instância", Rodando: true);
             if (e.Tipo == "reinicio") return new("ocupado", "reiniciando", "Reiniciando…", Rodando: true, Reinicio: true);
             if (e.Tipo == "build") return new("ocupado", "build", "Build em andamento · " + Dur(Agora.Ms - e.Desde), Build: true);
             if (e.Pronto == null) return new("ocupado", "subindo", e.Tipo == "debug" ? "Subindo em debug…" : "Subindo…", Rodando: true);

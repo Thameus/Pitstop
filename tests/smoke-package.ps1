@@ -37,6 +37,7 @@ foreach ($a in $releaseFiles) {
 
 $required = @(
     'LICENSE', 'NOTICE', 'LICENCAS.md', 'THIRD-PARTY-NOTICES.md', 'LEIAME.md',
+    'AGENTS.md', 'CLAUDE.md', 'docs/IA-MCP.md',
     'third-party/VERSIONS.json',
     'third-party/dotnet/LICENSE.TXT', 'third-party/dotnet/THIRD-PARTY-NOTICES.TXT',
     'third-party/dotnet/LICENSE-INFORMATION-WINDOWS.md', 'third-party/dotnet/DOTNET-LIBRARY-LICENSE.html',

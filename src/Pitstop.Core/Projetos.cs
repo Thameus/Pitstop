@@ -27,21 +27,29 @@ public static class Projetos
         var raiz = !string.IsNullOrWhiteSpace(dir) ? dir.Trim()
             : JsonAux.Txt(Config.Ler(), "projetosDir") ?? throw new ErroRunner("defina a pasta de projetos (neste perfil ou em Ajustes)");
         if (!Directory.Exists(raiz)) throw new ErroRunner("pasta de projetos não existe: " + raiz);
-        return Directory.EnumerateDirectories(raiz)
-            .Where(d => File.Exists(Path.Combine(d, "pom.xml")))
+        // Aceita tanto uma pasta contendo vários repositórios como o próprio repositório Maven.
+        // No reactor, DescobrirWars percorre os módulos declarados pelo pom.xml pai.
+        string[] repos = File.Exists(Path.Combine(raiz, "pom.xml"))
+            ? [raiz]
+            : Directory.EnumerateDirectories(raiz)
+                .Where(d => File.Exists(Path.Combine(d, "pom.xml")))
+                .ToArray();
+        return repos
             .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
             .Select(repo =>
             {
                 var lista = new List<ArtefatoDescoberto>();
-                DescobrirWars(repo, "", 0, lista);
+                DescobrirWars(repo, "", lista, new HashSet<string>(So.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal));
                 return new ProjetoDescoberto { Nome = Path.GetFileName(repo), Repo = repo, Artefatos = lista };
             })
             .ToList();
     }
 
-    static void DescobrirWars(string repo, string rel, int prof, List<ArtefatoDescoberto> lista)
+    static void DescobrirWars(string repo, string rel, List<ArtefatoDescoberto> lista, HashSet<string> visitados)
     {
-        var dir = Path.Combine(repo, rel);
+        var dir = Path.GetFullPath(Path.Combine(repo, rel));
+        // Reactor Maven pode ter mais de dois níveis e até módulos cíclicos/malformados.
+        if (!visitados.Add(dir)) return;
         var pom = Pom.Ler(dir);
         if (pom == null) return;
         if (pom.Packaging == "war")
@@ -62,8 +70,7 @@ public static class Projetos
                 DocBase = Tomcat.ResolverDocBase(new Artefato { Repo = repo, Modulo = rel }),
             });
         }
-        if (prof < 2)
-            foreach (var mo in pom.Modulos)
-                DescobrirWars(repo, Path.GetRelativePath(repo, Path.GetFullPath(Path.Combine(dir, mo))), prof + 1, lista);
+        foreach (var mo in pom.Modulos)
+            DescobrirWars(repo, Path.GetRelativePath(repo, Path.GetFullPath(Path.Combine(dir, mo))), lista, visitados);
     }
 }

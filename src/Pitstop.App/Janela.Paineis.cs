@@ -34,6 +34,7 @@ sealed partial class Janela
     readonly Dictionary<string, TextBox> fServ = new(), fApp = new(), fNpm = new(), fZip = new(), fComando = new();
     TextBox projetosDir = null!;
     CheckBox compilarAntes = null!, mostrarSemWar = null!, comandoAbrirPronto = null!, comandoAutoIniciar = null!;
+    CheckBox prepararTomcat = null!, syncTomcatAuto = null!, diretoTomcat = null!, reloadTomcat = null!;
     readonly TextBlock mainsInfo = Ui.Txt("", 12, "Mut"), scriptsInfo = Ui.Txt("", 12, "Mut"), versoesZipInfo = Ui.Txt("", 12, "Mut");
     readonly TextBlock npmLinha = Ui.Txt("", 12, "Mut", mono: true), zipInfo = Ui.Txt("", 12, "Mut", mono: true), projInfo = Ui.Txt("", 13, "Mut");
     readonly WrapPanel projsBox = new();
@@ -89,6 +90,14 @@ sealed partial class Janela
         procurar.Click += (_, _) => Redescobrir(true, "projetos atualizados");
         var direita = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { mostrarSemWar, procurar } };
 
+        prepararTomcat = Ui.Chk("Preparar automaticamente antes de iniciar (pula Maven se nada mudou)", true);
+        syncTomcatAuto = Ui.Chk("Sincronizar alterações automaticamente com o Tomcat no ar", true);
+        diretoTomcat = Ui.Chk("Publicação direta de recursos e classes (avançado; usa WAR explodido anterior para dependências)");
+        reloadTomcat = Ui.Chk("Tomcat reloadable: recarregar contexto ao mudar classes/JARs (pode aumentar CPU)");
+        prepararTomcat.IsCheckedChanged += (_, _) => MarcarSujo();
+        syncTomcatAuto.IsCheckedChanged += (_, _) => MarcarSujo();
+        diretoTomcat.IsCheckedChanged += (_, _) => MarcarSujo();
+        reloadTomcat.IsCheckedChanged += (_, _) => MarcarSujo();
         projetosDir = Ui.Inp("vazio = pasta de projetos de Ajustes");
         projetosDir.TextChanged += (_, _) => MarcarSujo();
         projetosDir.LostFocus += (_, _) => { if ((projetosDir.Text ?? "").Trim() != descobertosDe) Redescobrir(true); };
@@ -99,7 +108,9 @@ sealed partial class Janela
         };
         return Rolavel(
             Ui.Bloco("Projetos", null, direita, projInfo, Ui.Campo("Pasta de projetos deste perfil", Pasta(projetosDir, "Pasta de projetos")), projsBox),
-            Ui.Bloco("Artefatos", "war exploded dos projetos marcados", null, artsBox));
+            Ui.Bloco("Artefatos", "war exploded dos projetos marcados", null, artsBox),
+            Ui.Bloco("Desenvolvimento", "automático por padrão", null, prepararTomcat, syncTomcatAuto,
+                new Expander { Header = "Opções avançadas de publicação", Content = new StackPanel { Spacing = 10, Children = { diretoTomcat, reloadTomcat } } }));
     }
 
     Control PainelWars()
@@ -128,19 +139,39 @@ sealed partial class Janela
                         Ui.Opcoes(home, async () => (await Task.Run(() => Tomcat.Instalados())).Select(t => (t, "")).ToList()),
                         Ui.Procurar(home, "Pasta do Tomcat"))),
                     Ui.Campo("JDK (JAVA_HOME)", Pasta(java, "Pasta do JDK"))),
-                Ui.Grade(2,
-                    Ui.Campo("Maven para Build (vazio = padrão ou mvn do PATH)", Pasta(maven, "Pasta do Maven")),
-                    Ui.Campo("Configuração do Tomcat (vazio = <Tomcat>/conf)", Pasta(conf, "Pasta conf de origem")))),
+                new Expander
+                {
+                    Header = "Ferramentas avançadas",
+                    Content = Ui.Grade(2,
+                        Ui.Campo("Maven para Build (vazio = padrão ou mvn do PATH)", Pasta(maven, "Pasta do Maven")),
+                        Ui.Campo("Configuração do Tomcat (vazio = <Tomcat>/conf)", Pasta(conf, "Pasta conf de origem"))),
+                }),
             Ui.Bloco("Portas", null, null,
-                Ui.Grade(5,
-                    Ui.Campo("HTTP", F(fServ, "porta")),
-                    Ui.Campo("Debug (JPDA)", F(fServ, "portaDebug")),
-                    Ui.Campo("Shutdown", F(fServ, "portaShutdown", "HTTP − 75")),
-                    Ui.Campo("JMX", F(fServ, "portaJmx", "desligado")),
-                    Ui.Campo("AJP", F(fServ, "portaAjp", "desligado")))),
-            Ui.Bloco("JVM", null, null,
-                Ui.Campo("Argumentos da VM (CATALINA_OPTS)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dspring.profiles.active=dev")),
-                Ui.Campo("URL do perfil", F(fServ, "url"))));
+                Ui.Campo("HTTP", F(fServ, "porta")),
+                new Expander
+                {
+                    Header = "Portas avançadas",
+                    Content = Ui.Grade(4,
+                        Ui.Campo("Debug (JPDA)", F(fServ, "portaDebug")),
+                        Ui.Campo("Shutdown", F(fServ, "portaShutdown", "HTTP − 75")),
+                        Ui.Campo("JMX", F(fServ, "portaJmx", "desligado")),
+                        Ui.Campo("AJP", F(fServ, "portaAjp", "desligado"))),
+                }),
+            Ui.Bloco("Aplicação", null, null,
+                Ui.Campo("URL do perfil", F(fServ, "url")),
+                new Expander
+                {
+                    Header = "JVM e verificação de prontidão",
+                    Content = new StackPanel
+                    {
+                        Spacing = 12,
+                        Children =
+                        {
+                            Ui.Campo("Argumentos da VM (CATALINA_OPTS)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dspring.profiles.active=dev")),
+                            Ui.Campo("URL de prontidão (opcional; localhost na mesma porta)", F(fServ, "prontoUrl", "ex.: http://localhost:8080/app/health")),
+                        },
+                    },
+                }));
     }
 
     Control PainelApp()
@@ -323,6 +354,10 @@ sealed partial class Janela
                     Encher(fServ, p);
                     PlaceholdersServidor();
                     projetosDir.Text = JsonAux.Txt(p, "projetosDir") ?? "";
+                    prepararTomcat.IsChecked = p["prepararAoIniciar"]?.GetValue<bool>() == true;
+                    syncTomcatAuto.IsChecked = p["syncAutomatico"]?.GetValue<bool>() == true;
+                    diretoTomcat.IsChecked = p["publicacaoDireta"]?.GetValue<bool>() == true;
+                    reloadTomcat.IsChecked = p["reloadAutomatico"]?.GetValue<bool>() == true;
                     projetosDir.Watermark = "vazio = " + (JsonAux.Txt(cfg, "projetosDir") ?? "defina em Ajustes");
                     DepoisDeSalvar(p);
                     // perfil antigo sem "projetos": deduz pelos artefatos
@@ -413,6 +448,10 @@ sealed partial class Janela
                 Campos(fServ);
                 var dir = (projetosDir.Text ?? "").Trim();
                 if (dir == "") p.Remove("projetosDir"); else p["projetosDir"] = dir;
+                p["prepararAoIniciar"] = prepararTomcat.IsChecked == true;
+                p["syncAutomatico"] = syncTomcatAuto.IsChecked == true;
+                p["publicacaoDireta"] = diretoTomcat.IsChecked == true;
+                p["reloadAutomatico"] = reloadTomcat.IsChecked == true;
                 // pasta de projetos inválida (descoberta falhou): mantém o que está gravado em vez de salvar vazio
                 if (descobertaOk && descobertosDe != null)
                 {
