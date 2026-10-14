@@ -1236,6 +1236,29 @@ public sealed class Runner
 
     // ---------------------------------------------------------------- status e ações
 
+    /// <summary>
+    /// Quando outro processo Pitstop iniciou o perfil (pit up / outra instância), o pit.pid identifica
+    /// o processo real com PID + horário de início. Porta ocupada isoladamente NÃO prova propriedade.
+    /// A execução externa não é acoplada ao Runner atual, mas pode ser exibida e parada com segurança.
+    /// </summary>
+    static StatusExecucao? ExecucaoExterna(Perfil p, bool pronto)
+    {
+        var registro = PidArquivo.Ler(p);
+        if (registro is not { } r || !PidArquivo.Vivo(r, ExePid(p))) return null;
+        long desde = 0;
+        try
+        {
+            using var processo = Process.GetProcessById(r.Pid);
+            desde = new DateTimeOffset(processo.StartTime).ToUnixTimeMilliseconds();
+        }
+        catch { /* PID validado acima; início é apenas metadado de exibição. */ }
+        return new StatusExecucao
+        {
+            Tipo = "externo", Pid = r.Pid, Desde = desde,
+            Pronto = pronto ? desde : null,
+        };
+    }
+
     /// <summary>Estado de todos os perfis. Sondas de porta em paralelo (porta fechada demora até o timeout).</summary>
     public async Task<List<StatusPerfil>> Status()
     {
@@ -1257,44 +1280,47 @@ public sealed class Runner
             }
             if (p.EhComando)
             {
-                var r = e == null ? PidArquivo.Ler(p) : null;
+                var r = e == null && exec == null ? ExecucaoExterna(p,
+                    p.Porta <= 0 || await Proc.PortaOcupada(p.Porta).ConfigureAwait(false)) : null;
                 return new StatusPerfil
                 {
                     Nome = nome, Tipo = "comando", Porta = p.Porta > 0 ? p.Porta : null, Url = p.Url,
                     Comando = ComandoApp.Linhas(p.Comando).FirstOrDefault().Texto, Pasta = p.Pasta,
-                    EmUso = e != null || (r != null && PidArquivo.Vivo(r.Value, ComandoApp.NomeProcessoShell(p))),
-                    Execucao = exec, Ultimo = u,
+                    EmUso = e != null || r != null,
+                    Execucao = exec ?? r, Ultimo = u,
                 };
             }
             if (p.EhJava)
             {
                 // sem porta: "em uso" = processo do runner rodando, ou o pid gravado (pit up / outra instância)
-                var r = e == null ? PidArquivo.Ler(p) : null;
+                var r = e == null && exec == null ? ExecucaoExterna(p, true) : null;
                 return new StatusPerfil
                 {
                     Nome = nome, Tipo = "java", PortaDebug = p.PortaDebug, MainClass = p.EhZip ? null : p.MainClass,
                     Pacote = p.EhZip ? p.Pacote : null,
-                    EmUso = (e != null && e.Tipo != "build") || (r != null && PidArquivo.Vivo(r.Value, "java")),
-                    Execucao = exec, Ultimo = u,
+                    EmUso = (e != null && e.Tipo != "build") || r != null,
+                    Execucao = exec ?? r, Ultimo = u,
                 };
             }
             if (p.EhNpm)
             {
-                var r = e == null ? PidArquivo.Ler(p) : null;
+                var portaAberta = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
+                var r = e == null && exec == null ? ExecucaoExterna(p, portaAberta || p.Porta <= 0) : null;
                 return new StatusPerfil
                 {
                     Nome = nome, Tipo = "npm", Porta = p.Porta, Url = p.Url, Script = p.Script,
-                    EmUso = (e != null && e.Tipo != "build") || (r != null && PidArquivo.Vivo(r.Value, So.Shell))
-                            || await Proc.PortaOcupada(p.Porta).ConfigureAwait(false),
-                    Execucao = exec, Ultimo = u,
+                    EmUso = (e != null && e.Tipo != "build") || r != null || portaAberta,
+                    Execucao = exec ?? r, Ultimo = u,
                 };
             }
+            var portaTomcatAberta = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
+            var tomcatExterno = e == null && exec == null ? ExecucaoExterna(p, portaTomcatAberta) : null;
             return new StatusPerfil
             {
                 Nome = nome, Tipo = "tomcat", Porta = p.Porta, PortaDebug = p.PortaDebug, Url = p.Url,
                 Pacote = p.EhWar ? string.Join("; ", p.Artefatos.Select(a => a.War)) : null,
-                EmUso = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false),
-                Execucao = exec, Ultimo = u,
+                EmUso = (e != null && e.Tipo != "build") || tomcatExterno != null || portaTomcatAberta,
+                Execucao = exec ?? tomcatExterno, Ultimo = u,
                 // perfil "war": o war no lugar do repo (a tela casa o cartão por ele)
                 Artefatos = p.Artefatos.Select(a => new StatusArtefato(a.War ?? a.Repo, a.Modulo, a.Contexto, Tomcat.ResolverDocBase(a))).ToList(),
             };

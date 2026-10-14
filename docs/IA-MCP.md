@@ -114,6 +114,10 @@ não disponibilize esse MCP a terceiros ou agentes sem confirmação de ações 
   preferencialmente da mesma instalação.
 - Se o Pitstop não estiver aberto, tools/list ainda funciona, mas chamadas
   que precisam da API retornam erro explicativo.
+- Perfis iniciados por `pit up` ou outra instância Pitstop aparecem como
+  **iniciados externamente** na UI/MCP, porque possuem `pit.pid` validado por
+  PID e identidade de início. Serviços não identificados apenas pela porta não
+  são atribuídos ao perfil automaticamente.
 - A API HTTP local continua isolada em loopback; o MCP não é acesso remoto.
 - O atualizador de versões e o controle de inicialização automática do Pitstop
   permanecem funcionalidades da interface desktop, não ferramentas MCP.

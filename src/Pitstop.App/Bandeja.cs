@@ -120,6 +120,7 @@ sealed class Bandeja
     {
         if (p.Execucao is { } e)
         {
+            if (e.Tipo == "externo") return e.Pronto == null ? "ocupado" : "externo";
             if (e.Tipo == "build" || e.Pronto == null) return "ocupado";
             return e.Tipo == "debug" ? "debug" : "noar";
         }
@@ -130,6 +131,7 @@ sealed class Bandeja
     {
         if (p.Execucao is { } e)
         {
+            if (e.Tipo == "externo") return e.Pronto == null ? "iniciando externamente" : "no ar (iniciado externamente)";
             if (e.Tipo == "build") return "build " + Agora.Duracao(Agora.Ms - e.Desde);
             if (e.Tipo == "reinicio") return "reiniciando";
             if (e.Pronto == null) return e.Tipo == "debug" ? "subindo (debug)" : "subindo";
@@ -161,7 +163,7 @@ sealed class Bandeja
 
     void DetectarTransicao(StatusPerfil p)
     {
-        var pronto = p.Execucao?.Pronto;
+        var pronto = p.Execucao?.Tipo == "externo" ? null : p.Execucao?.Pronto;
         var fim = p.Ultimo?.Fim;
         if (ant.TryGetValue(p.Nome, out var a))
         {

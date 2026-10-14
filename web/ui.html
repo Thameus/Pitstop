@@ -814,6 +814,9 @@ function estadoDe(st) {
   if (!st) return { k: 'parado', txt: 'parado', pill: 'Parado' };
   const e = st.execucao;
   if (e) {
+    if (e.tipo === 'externo') return e.pronto === null || e.pronto === undefined
+      ? { k: 'ocupado', txt: 'subindo', pill: 'Iniciando externamente…', rodando: true, fora: true }
+      : { k: 'externo', txt: 'no ar', pill: 'No ar · iniciado pelo terminal ou outra instância', rodando: true, fora: true };
     if (e.tipo === 'reinicio') return { k: 'ocupado', txt: 'reiniciando', pill: 'Reiniciando…', rodando: true, reinicio: true };
     if (e.tipo === 'build') return { k: 'ocupado', txt: 'build', pill: 'Build em andamento · ' + dur(Date.now() - e.desde), build: true };
     if (!e.pronto) return { k: 'ocupado', txt: 'subindo', pill: e.tipo === 'debug' ? 'Subindo em debug…' : 'Subindo…', rodando: true };

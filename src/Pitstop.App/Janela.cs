@@ -431,6 +431,9 @@ sealed partial class Janela : Window
         if (st == null) return new("parado", "parado", "Parado");
         if (st.Execucao is { } e)
         {
+            if (e.Tipo == "externo") return e.Pronto == null
+                ? new("ocupado", "subindo", "Iniciando externamente…", Rodando: true)
+                : new("externo", "no ar", "No ar · iniciado pelo terminal ou outra instância", Rodando: true);
             if (e.Tipo == "reinicio") return new("ocupado", "reiniciando", "Reiniciando…", Rodando: true, Reinicio: true);
             if (e.Tipo == "build") return new("ocupado", "build", "Build em andamento · " + Dur(Agora.Ms - e.Desde), Build: true);
             if (e.Pronto == null) return new("ocupado", "subindo", e.Tipo == "debug" ? "Subindo em debug…" : "Subindo…", Rodando: true);

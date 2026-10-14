@@ -232,6 +232,21 @@ Exemplo de perfil Comando:
 
 Quando `pasta` está vazia, o runner usa `PROJETOS_DIR` se ele estiver configurado **e existir**; caso contrário, usa a HOME do usuário.
 
+## Reconhecimento de perfis iniciados fora da janela
+
+Ao iniciar um perfil pelo terminal com `pit up <perfil>`, o Pitstop registra o processo
+(PID e identidade de início) no arquivo local `pit.pid`. Outras instâncias do Pitstop,
+incluindo a janela desktop, bandeja e interface web, reconhecem esse processo como
+**iniciado externamente**, exibem seu estado e permitem parar/reiniciar pelo perfil.
+Essa informação também aparece no status retornado ao MCP.
+
+Durante o início, perfis que dependem de porta permanecem em **Iniciando externamente**
+até a porta configurada abrir; após isso aparecem como **No ar**. Processos de terceiros
+que apenas ocupam a mesma porta **não são assumidos como pertencentes ao perfil** sem
+a identidade validada: isso evita parar acidentalmente o serviço errado.
+
+Teste de regressão: `powershell -File tests/external-status-smoke.ps1`.
+
 ## Integração com agentes de IA (MCP)
 
 O Pitstop oferece um servidor **MCP stdio** integrado à CLI, sem dependências ou serviço de rede adicional. Após iniciar o Pitstop pelo aplicativo desktop ou por `pit ui`, configure `pit mcp` no cliente de IA compatível com MCP. O agente passa a descobrir as ferramentas automaticamente, incluindo status, logs, gerenciamento de perfis, ações de execução/build/sync e descoberta de projetos.
