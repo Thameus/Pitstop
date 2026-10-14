@@ -63,6 +63,11 @@ if ($origem.TrimEnd('\') -ne $Destino.TrimEnd('\')) {
         if (Test-Path $alvo) { Remove-Item -Recurse -Force $alvo }
         Copy-Item -Recurse (Join-Path $origem $d) $alvo
     }
+    if (Test-Path (Join-Path $origem 'docs')) {
+        $docsDestino = Join-Path $Destino 'docs'
+        New-Item -ItemType Directory -Force $docsDestino | Out-Null
+        Copy-Item -Recurse -Force (Join-Path $origem 'docs\*') $docsDestino
+    }
     foreach ($f in Get-ChildItem $origem -File) { Copy-Item $f.FullName (Join-Path $Destino $f.Name) -Force }
 
     # No repositório os auxiliares ficam organizados em scripts/install; no pacote já vêm achatados na raiz.

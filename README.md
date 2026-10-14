@@ -232,6 +232,14 @@ Exemplo de perfil Comando:
 
 Quando `pasta` está vazia, o runner usa `PROJETOS_DIR` se ele estiver configurado **e existir**; caso contrário, usa a HOME do usuário.
 
+## Integração com agentes de IA (MCP)
+
+O Pitstop oferece um servidor **MCP stdio** integrado à CLI, sem dependências ou serviço de rede adicional. Após iniciar o Pitstop pelo aplicativo desktop ou por `pit ui`, configure `pit mcp` no cliente de IA compatível com MCP. O agente passa a descobrir as ferramentas automaticamente, incluindo status, logs, gerenciamento de perfis, ações de execução/build/sync e descoberta de projetos.
+
+O comando `pit capabilities` produz o catálogo JSON das ferramentas; `AGENTS.md` e `CLAUDE.md` ajudam agentes trabalhando neste repositório. A configuração de cada computador/cliente continua necessária e a API permanece restrita a `127.0.0.1`.
+
+**Guia completo:** [docs/IA-MCP.md](docs/IA-MCP.md). **Teste isolado:** `powershell -File tests/mcp-smoke.ps1`.
+
 ## CLI
 
 Exemplos:
@@ -244,6 +252,8 @@ pit build <perfil>
 pit logs <perfil>
 pit ui
 pit ajustes
+pit capabilities
+pit mcp
 ```
 
 As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõe Build, Debug ou Sync.
@@ -266,6 +276,7 @@ As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõ
 - [DESIGN.md](DESIGN.md) — sistema visual e baseline de UI desktop/web;
 - [docs/ESTRUTURA.md](docs/ESTRUTURA.md) — organização do repositório;
 - [docs/BUILD-RELEASE.md](docs/BUILD-RELEASE.md) — build, CI, empacotamento, tags e release;
+- [docs/IA-MCP.md](docs/IA-MCP.md) — integração MCP/CLI para agentes de IA;
 - [LICENCAS.md](LICENCAS.md) — resumo das licenças redistribuídas;
 - [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — notices de terceiros.
 

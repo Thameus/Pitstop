@@ -125,6 +125,12 @@ pit ajustes
 
 Ações como Build, Debug e Sync aparecem apenas em tipos que suportam essas operações.
 
+## Uso com assistentes de IA
+
+A CLI também fornece `pit capabilities` (catálogo JSON) e `pit mcp` (servidor MCP stdio). Para que uma IA compatível controle os perfis sem clicar na interface, mantenha a janela do Pitstop ou `pit ui` em execução e configure o cliente MCP para executar `pit mcp` na mesma instalação. Não é necessário abrir portas externas. Operações que modificam perfis ou iniciam/param serviços devem ser confirmadas pelo usuário.
+
+Instruções e exemplos: [docs/IA-MCP.md](docs/IA-MCP.md).
+
 ## Arquivos do usuário
 
 Na instalação ficam, entre outros:

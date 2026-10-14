@@ -66,7 +66,7 @@ if (Test-Path $somas) { Remove-Item $somas }
 
 # O repositório mantém scripts internos organizados em scripts/. O pacote final continua
 # com instaladores/desinstaladores na raiz para preservar compatibilidade.
-$raizComum = @('.env.exemplo', 'LICENCAS.md', 'THIRD-PARTY-NOTICES.md', 'LICENSE', 'NOTICE')
+$raizComum = @('.env.exemplo', 'LICENCAS.md', 'THIRD-PARTY-NOTICES.md', 'LICENSE', 'NOTICE', 'AGENTS.md', 'CLAUDE.md')
 $porSo = @{
     'win-x64' = [ordered]@{
         'instalar.cmd'                         = 'instalar.cmd'
@@ -195,6 +195,7 @@ foreach ($rid in $Rids) {
         Write-Host '   Pitstop.exe e pit.exe assinados'
     }
     Copy-Item -Recurse (Join-Path $repo 'web') (Join-Path $dir 'web')
+    Copy-Item -Recurse (Join-Path $repo 'docs') (Join-Path $dir 'docs')
     Copy-Item -Recurse (Join-Path $repo 'third-party') (Join-Path $dir 'third-party')
     foreach ($f in $raizComum) { Copy-Item (Join-Path $repo $f) $dir }
     foreach ($item in $porSo[$rid].GetEnumerator()) {
