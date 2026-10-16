@@ -120,7 +120,20 @@ public sealed class Servidor(Runner runner, int porta)
                 return;
             }
             // ?dir= pasta de projetos do perfil (vazio = PROJETOS_DIR do .env)
-            if (get && url == "/api/projetos") { await Responder(res, 200, Projetos.Listar(req.Query["dir"].ToString(), req.Query["repos"].Select(r => r ?? ""))); return; }
+            if (get && url == "/api/projetos")
+            {
+                // Repositorios adicionais: apenas os caminhos ja salvos no perfil local.
+                // A API nao aceita uma lista arbitraria de caminhos na query HTTP.
+                var perfilNome = req.Query["perfil"].ToString();
+                var cfg = Config.Ler()["perfis"] as JsonObject;
+                var salvo = Config.NomeValido(perfilNome) ? cfg?[perfilNome] as JsonObject : null;
+                IEnumerable<string> reposSalvos =
+                    (salvo?["projetos"] as JsonArray)?.Select(n => n?.ToString() ?? "") ??
+                    (salvo?["artefatos"] as JsonArray)?.OfType<JsonObject>()
+                        .Select(a => JsonAux.Txt(a, "repo") ?? "") ?? [];
+                await Responder(res, 200, Projetos.Listar(req.Query["dir"].ToString(), reposSalvos));
+                return;
+            }
             // seletor de classe da tela: classes com main nos fontes do módulo (?modulo=<pasta com pom.xml>)
             if (get && url == "/api/mains")
             {

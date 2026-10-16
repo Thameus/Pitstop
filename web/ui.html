@@ -561,6 +561,8 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 const chave = (repo, modulo) => (repo + '|' + (modulo || '')).toLowerCase();
 let cfg = null, atual = null, fonte = null, linhas = [], ocupado = false, sujo = false;
 let descobertos = [];          // [{nome, repo, artefatos:[...]}] vindos do servidor
+let projetosPendentes = [];     // novos repositorios ainda nao salvos
+let descobertosPerfil = null;   // evita reutilizar descoberta de outro perfil
 let selProj = new Set();       // repos marcados no perfil atual
 let artsPerfil = {};           // chave -> artefato salvo no perfil
 let statusTodos = [];          // /api/status (todos os perfis)
@@ -715,8 +717,14 @@ async function descobrir() {
   try {
     const query = new URLSearchParams();
     if (dir) query.set('dir', dir);
-    selProj.forEach(repo => query.append('repos', repo));
-    descobertos = await api('GET', '/api/projetos?' + query.toString());
+    query.set('perfil', atual);
+    const lista = await api('GET', '/api/projetos?' + query.toString());
+    const mapa = new Map(lista.map(p => [p.repo.toLowerCase(), p]));
+    projetosPendentes.forEach(p => {
+      if (!mapa.has(p.repo.toLowerCase())) mapa.set(p.repo.toLowerCase(), p);
+    });
+    descobertos = [...mapa.values()];
+    descobertosPerfil = atual;
     descobertaOk = true;
   }
   catch (e) { descobertos = []; descobertaOk = false; throw e; }
@@ -783,8 +791,9 @@ function preencher() {
     (p.artefatos || []).forEach(a => artsPerfil[chave(a.repo, a.modulo)] = a);
     // perfil antigo sem "projetos": deduz pelos artefatos
     selProj = new Set((p.projetos || (p.artefatos || []).map(a => a.repo)).map(r => r.toLowerCase()));
+    projetosPendentes = [];
     // outro perfil pode apontar outra pasta de projetos: procura de novo antes de pintar
-    if ((p.projetosDir || '') !== descobertosDe) redescobrir('', false);   // sem lembrar: os cartões na tela são do perfil anterior
+    if ((p.projetosDir || '') !== descobertosDe || descobertosPerfil !== atual) redescobrir('', false);   // sem lembrar: os cartões na tela são do perfil anterior
     else { pintarProjetos(); pintarArtefatos(); }
   }
   pintarCabecalho();
@@ -1295,7 +1304,11 @@ $('#adicionarProjeto').onclick = async () => {
     const validos = encontrados.filter(p => !p.erro);
     if (!validos.length) throw new Error('Nenhum projeto Maven válido encontrado nessa pasta');
     lembrarArtefatos();
-    validos.forEach(p => selProj.add(p.repo.toLowerCase()));
+    validos.forEach(p => {
+      selProj.add(p.repo.toLowerCase());
+      projetosPendentes = projetosPendentes.filter(e => e.repo.toLowerCase() !== p.repo.toLowerCase());
+      projetosPendentes.push(p);
+    });
     $('#novoProjetoDir').value = '';
     marcarSujo();
     await redescobrir('projeto adicionado', false);
