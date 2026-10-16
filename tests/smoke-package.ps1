@@ -157,6 +157,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Pitstop integrated updater blocker smoke failed with exit code $LASTEXITCODE" }
     & $updater --smoke-update --package $windowsArchive --sha256 $expectedHash[(Split-Path $windowsArchive -Leaf)]
     if ($LASTEXITCODE -ne 0) { throw "Pitstop integrated updater apply smoke failed with exit code $LASTEXITCODE" }
+    & $updater --smoke-rollback --package $windowsArchive --sha256 $expectedHash[(Split-Path $windowsArchive -Leaf)]
+    if ($LASTEXITCODE -ne 0) { throw "Pitstop updater transactional rollback smoke failed with exit code $LASTEXITCODE" }
 
     & $installers['win-x64'] --smoke
     if ($LASTEXITCODE -ne 0) { throw "Pitstop Setup payload smoke failed with exit code $LASTEXITCODE" }

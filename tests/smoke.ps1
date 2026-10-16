@@ -257,6 +257,28 @@ try {
     $parent = $http.GetStringAsync("$base/api/projetos?dir=$([Uri]::EscapeDataString($work))").GetAwaiter().GetResult() | ConvertFrom-Json
     if (@($parent | Where-Object nome -eq 'maven-sample').Count -ne 1) { throw 'Maven parent directory not discovered' }
 
+    # Issues #22 e #23: dois repos em pastas distintas e repo offline sem perder a seleção.
+    $other = Join-Path $tmp 'other-workspace\repo-two'
+    New-Item -ItemType Directory -Force $other | Out-Null
+    Set-Content -Path (Join-Path $other 'pom.xml') -Encoding UTF8 -Value '<project><modelVersion>4.0.0</modelVersion><groupId>test</groupId><artifactId>repo-two</artifactId><version>1</version><packaging>war</packaging></project>'
+    $offline = Join-Path $tmp 'other-workspace\offline'
+    # A lista externa vem da configuração salva, não de parâmetros HTTP arbitrários.
+    $configMulti = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    $configMulti.perfis | Add-Member -NotePropertyName 'multi' -NotePropertyValue ([ordered]@{
+        tipo = 'tomcat'; projetos = @($other, $mavenDir, $offline)
+    })
+    $configMulti | ConvertTo-Json -Depth 12 | Set-Content $cfgPath -Encoding UTF8
+    $urlMulti = "$base/api/projetos?dir=$([Uri]::EscapeDataString($mavenDir))&perfil=multi"
+    $multi = $http.GetStringAsync($urlMulti).GetAwaiter().GetResult() | ConvertFrom-Json
+    if (@($multi).Count -ne 3) { throw 'independent repositories were not merged/deduplicated' }
+    if (@($multi | Where-Object { $_.repo -eq $other -and @($_.artefatos).Count -eq 1 }).Count -ne 1) { throw 'second independent Maven project missing' }
+    if (@($multi | Where-Object { $_.repo -eq $offline -and $_.erro }).Count -ne 1) { throw 'offline selected repository not preserved' }
+    $naoAutorizado = Join-Path $tmp 'pasta-nao-cadastrada'
+    $urlInjetada = "$urlMulti&repos=$([Uri]::EscapeDataString($naoAutorizado))"
+    $resultadoInjetado = $http.GetStringAsync($urlInjetada).GetAwaiter().GetResult() | ConvertFrom-Json
+    if (@($resultadoInjetado).Count -ne 3) { throw 'untrusted repo query must be ignored' }
+
+
     # Cadastro guiado: Maven/navegação por pasta e npm, somente a partir da UI local.
     $inspectNoHeader = $http.GetAsync("$base/api/inspecionar?dir=$([Uri]::EscapeDataString($mavenDir))").GetAwaiter().GetResult()
     if ([int]$inspectNoHeader.StatusCode -ne 403) { throw 'inspection without X-PIT should return 403' }

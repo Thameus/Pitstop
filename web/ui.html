@@ -340,6 +340,10 @@ body.semPerfis .corpo{display:none}
           </div>
         </div>
         <label class="campo">Pasta de projetos deste perfil<input class="inp" id="projetosDir" placeholder="vazio = pasta de projetos de Ajustes"></label>
+        <div class="grade">
+          <label class="campo">Adicionar projeto de outra pasta<input class="inp" id="novoProjetoDir" placeholder="Selecione um repositório Maven"></label>
+          <div style="display:flex;align-items:end"><button class="btn" id="adicionarProjeto" type="button">Adicionar projeto</button></div>
+        </div>
         <div class="projs" id="projs"></div>
       </div>
       <div class="bloco">
@@ -399,11 +403,9 @@ body.semPerfis .corpo{display:none}
       <div class="bloco">
         <h2>Aplicação</h2>
         <label class="campo">URL do perfil<input class="inp" id="url"></label>
-        <details><summary>JVM e verificação de prontidão</summary>
-          <div style="display:grid;gap:12px;margin-top:12px">
-            <label class="campo">Argumentos da VM (CATALINA_OPTS)<input class="inp" id="vmArgs"></label>
-            <label class="campo">URL de prontidão (opcional; HTTP localhost na mesma porta)<input class="inp" id="prontoUrl" placeholder="http://localhost:8080/app/health"></label>
-          </div>
+        <label class="campo">Argumentos da JVM (CATALINA_OPTS, salvos neste perfil)<input class="inp" id="vmArgs" placeholder="-Xmx1g -Dvalidar-xxxxx=true"></label>
+        <details><summary>Verificação de prontidão</summary>
+          <label class="campo" style="margin-top:12px">URL de prontidão (opcional; HTTP localhost na mesma porta)<input class="inp" id="prontoUrl" placeholder="http://localhost:8080/app/health"></label>
         </details>
       </div>
     </section>
@@ -559,6 +561,8 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 const chave = (repo, modulo) => (repo + '|' + (modulo || '')).toLowerCase();
 let cfg = null, atual = null, fonte = null, linhas = [], ocupado = false, sujo = false;
 let descobertos = [];          // [{nome, repo, artefatos:[...]}] vindos do servidor
+let projetosPendentes = [];     // novos repositorios ainda nao salvos
+let descobertosPerfil = null;   // evita reutilizar descoberta de outro perfil
 let selProj = new Set();       // repos marcados no perfil atual
 let artsPerfil = {};           // chave -> artefato salvo no perfil
 let statusTodos = [];          // /api/status (todos os perfis)
@@ -583,7 +587,7 @@ const dur = ms => { const s = Math.round(ms / 1000); return s < 60 ? s + 's' : M
 const base = p => (p || '').split(/[\\/]/).filter(Boolean).pop() || '';
 const versaoDe = f => (f || '').split(/[\\/]/).filter(Boolean).slice(-2, -1)[0] || '';   // .../v1.2.0/app.war -> v1.2.0
 
-const camposDePasta = ['projetosDir', 'tomcatHome', 'javaHome', 'mavenHome', 'confOrigem',
+const camposDePasta = ['projetosDir', 'novoProjetoDir', 'tomcatHome', 'javaHome', 'mavenHome', 'confOrigem',
   'j_modulo', 'j_trabalho', 'j_javaHome', 'j_javaHomeBuild', 'j_mavenHome',
   'z_conf', 'z_javaHome', 'n_pasta', 'n_nodeHome', 'c_pasta'];
 let campoPasta = null, pastaSelecionada = null, pastaPai = null, consultaPasta = 0;
@@ -710,7 +714,19 @@ let descobertaOk = true;       // false = pasta de projetos inválida: salvar ma
 async function descobrir() {
   // pasta de projetos é do perfil (o .env só dá o padrão)
   const dir = tipoDe(cfg && cfg.perfis[atual]) === 'tomcat' ? $('#projetosDir').value.trim() : '';
-  try { descobertos = await api('GET', '/api/projetos' + (dir ? '?dir=' + encodeURIComponent(dir) : '')); descobertaOk = true; }
+  try {
+    const query = new URLSearchParams();
+    if (dir) query.set('dir', dir);
+    query.set('perfil', atual);
+    const lista = await api('GET', '/api/projetos?' + query.toString());
+    const mapa = new Map(lista.map(p => [p.repo.toLowerCase(), p]));
+    projetosPendentes.forEach(p => {
+      if (!mapa.has(p.repo.toLowerCase())) mapa.set(p.repo.toLowerCase(), p);
+    });
+    descobertos = [...mapa.values()];
+    descobertosPerfil = atual;
+    descobertaOk = true;
+  }
   catch (e) { descobertos = []; descobertaOk = false; throw e; }
   finally { descobertosDe = dir; }
   $('#projInfo').textContent = '· ' + descobertos.filter(p => p.artefatos.length).length + ' com war';
@@ -766,6 +782,7 @@ function preencher() {
     $('#javaHome').placeholder = 'vazio = ' + (cfg.javaHome || 'JAVA_HOME do sistema');
     $('#mavenHome').placeholder = 'vazio = ' + (cfg.mavenHome || 'mvn do PATH');
     $('#projetosDir').placeholder = 'vazio = ' + (cfg.projetosDir || 'defina em Ajustes');
+    $('#novoProjetoDir').value = '';
     $('#p_preparar').checked = p.prepararAoIniciar === true;
     $('#p_syncAuto').checked = p.syncAutomatico === true;
     $('#p_direto').checked = p.publicacaoDireta === true;
@@ -774,8 +791,9 @@ function preencher() {
     (p.artefatos || []).forEach(a => artsPerfil[chave(a.repo, a.modulo)] = a);
     // perfil antigo sem "projetos": deduz pelos artefatos
     selProj = new Set((p.projetos || (p.artefatos || []).map(a => a.repo)).map(r => r.toLowerCase()));
+    projetosPendentes = [];
     // outro perfil pode apontar outra pasta de projetos: procura de novo antes de pintar
-    if ((p.projetosDir || '') !== descobertosDe) redescobrir('', false);   // sem lembrar: os cartões na tela são do perfil anterior
+    if ((p.projetosDir || '') !== descobertosDe || descobertosPerfil !== atual) redescobrir('', false);   // sem lembrar: os cartões na tela são do perfil anterior
     else { pintarProjetos(); pintarArtefatos(); }
   }
   pintarCabecalho();
@@ -928,8 +946,8 @@ function pintarProjetos() {
     const el = document.createElement('label');
     const marcado = selProj.has(p.repo.toLowerCase());
     el.className = 'proj' + (marcado ? ' sel' : '') + (p.artefatos.length ? '' : ' vazio');
-    el.title = p.repo;
-    el.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''}><span>${esc(p.nome)}</span><span class="n">${p.artefatos.length ? p.artefatos.length + ' war' : 'sem war'}</span>`;
+    el.title = p.erro || p.repo;
+    el.innerHTML = `<input type="checkbox" ${marcado ? 'checked' : ''}><span>${esc(p.nome)}</span><span class="n">${p.erro ? 'pasta indisponível' : p.artefatos.length ? p.artefatos.length + ' war' : 'sem war'}</span>`;
     el.querySelector('input').onchange = e => {
       lembrarArtefatos();
       if (e.target.checked) selProj.add(p.repo.toLowerCase()); else selProj.delete(p.repo.toLowerCase());
@@ -948,6 +966,11 @@ function pintarArtefatos() {
   const marcados = descobertos.filter(p => selProj.has(p.repo.toLowerCase()));
   if (!marcados.length) { box.innerHTML = '<div class="vazio-msg">Marque um projeto acima.</div>'; return; }
   marcados.forEach(p => {
+    if (p.erro) {
+      const aviso = document.createElement('div'); aviso.className = 'vazio-msg';
+      aviso.textContent = p.nome + ': ' + p.erro + ' (artefatos salvos preservados)';
+      box.appendChild(aviso); return;
+    }
     if (!p.artefatos.length) {
       box.insertAdjacentHTML('beforeend', `<div class="vazio-msg">${esc(p.nome)}: nenhum módulo war.</div>`);
       return;
@@ -1067,7 +1090,13 @@ function coletar() {
   // pasta de projetos inválida (descoberta falhou): mantém o que está gravado em vez de salvar vazio
   const gravado = cfg.perfis[atual] || {};
   p.projetos = descobertaOk ? descobertos.filter(x => selProj.has(x.repo.toLowerCase())).map(x => x.repo) : (gravado.projetos || []);
-  p.artefatos = descobertaOk ? $$('#arts .art').map(lerCartao) : (gravado.artefatos || []);
+  if (descobertaOk) {
+    const visiveis = $('#arts .art').map(lerCartao);
+    const chaves = new Set(visiveis.map(a => chave(a.repo, a.modulo)));
+    const indisponiveis = Object.values(artsPerfil).filter(a =>
+      selProj.has(a.repo.toLowerCase()) && !chaves.has(chave(a.repo, a.modulo)));
+    p.artefatos = visiveis.concat(indisponiveis);
+  } else p.artefatos = gravado.artefatos || [];
   return p;
 }
 function validar(p) {
@@ -1097,7 +1126,7 @@ function validar(p) {
   if (p.tipo === 'war' && p.artefatos.some(a => !a.war)) throw new Error('war sem arquivo (aba Pacotes)');
   // war sem contexto = nome do arquivo (app.war -> /app), igual ao servidor
   const ctx = p.artefatos.filter(a => a.ativo).map(a => a.contexto || (a.war ? '/' + base(a.war).replace(/\.war$/i, '') : ''));
-  if (new Set(ctx).size !== ctx.length) throw new Error('dois artefatos marcados com o mesmo contexto');
+  if (new Set(ctx.map(c => c.replace(/^\/+|\/+$/g, '').replace(/\//g, '#').toLowerCase())).size !== ctx.length) throw new Error('dois artefatos marcados com o mesmo contexto');
 }
 async function salvar() {
   if (!atual) return;
@@ -1265,6 +1294,26 @@ async function redescobrir(ok, lembrar = true) {
   pintarArtefatos();
 }
 $('#recarregar').onclick = () => redescobrir('projetos atualizados');
+$('#adicionarProjeto').onclick = async () => {
+  const pasta = $('#novoProjetoDir').value.trim();
+  if (!pasta) { msg('Escolha a pasta de um projeto Maven', 'err'); return; }
+  const perfilAberto = atual;
+  try {
+    const encontrados = await api('GET', '/api/projetos?dir=' + encodeURIComponent(pasta));
+    if (perfilAberto !== atual) return;
+    const validos = encontrados.filter(p => !p.erro);
+    if (!validos.length) throw new Error('Nenhum projeto Maven válido encontrado nessa pasta');
+    lembrarArtefatos();
+    validos.forEach(p => {
+      selProj.add(p.repo.toLowerCase());
+      projetosPendentes = projetosPendentes.filter(e => e.repo.toLowerCase() !== p.repo.toLowerCase());
+      projetosPendentes.push(p);
+    });
+    $('#novoProjetoDir').value = '';
+    marcarSujo();
+    await redescobrir('projeto adicionado', false);
+  } catch(e) { msg(e.message, 'err'); }
+};
 $('#projetosDir').addEventListener('change', () => redescobrir(''));
 $('#filtro').oninput = filtrarDepois;
 $('#limpar').onclick = async () => { await api('POST', '/api/p/' + encodeURIComponent(atual) + '/limpar'); linhas = []; repintar(); };

@@ -37,6 +37,9 @@ jobs:
           sh -n pit
           sh -n tests/smoke-package-linux.sh
 
+      - name: Integration tests (#22 / #23)
+        run: dotnet run --project tests/Pitstop.Integration/Pitstop.Integration.csproj -c Release
+
       - name: Smoke
         shell: pwsh
         run: ./tests/smoke.ps1

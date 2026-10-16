@@ -32,7 +32,7 @@ sealed partial class Janela
     static readonly HashSet<string> Numericos = ["porta", "portaDebug", "portaShutdown", "portaJmx", "portaAjp", "timeoutExecucaoSeg"];
 
     readonly Dictionary<string, TextBox> fServ = new(), fApp = new(), fNpm = new(), fZip = new(), fComando = new();
-    TextBox projetosDir = null!;
+    TextBox projetosDir = null!, novoProjetoDir = null!;
     CheckBox compilarAntes = null!, mostrarSemWar = null!, comandoAbrirPronto = null!, comandoAutoIniciar = null!;
     CheckBox prepararTomcat = null!, syncTomcatAuto = null!, diretoTomcat = null!, reloadTomcat = null!;
     readonly TextBlock mainsInfo = Ui.Txt("", 12, "Mut"), scriptsInfo = Ui.Txt("", 12, "Mut"), versoesZipInfo = Ui.Txt("", 12, "Mut");
@@ -89,6 +89,27 @@ sealed partial class Janela
         var procurar = Ui.Btn("Procurar de novo", "link", "sync", "AccTxt").Dica("Procurar de novo na pasta de projetos");
         procurar.Click += (_, _) => Redescobrir(true, "projetos atualizados");
         var direita = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { mostrarSemWar, procurar } };
+        novoProjetoDir = Ui.Inp("Selecione a pasta de outro projeto Maven");
+        var adicionarProjeto = Ui.Btn("Adicionar projeto", "link", "novo", "AccTxt");
+        adicionarProjeto.Click += async (_, _) =>
+        {
+            var pasta = (novoProjetoDir.Text ?? "").Trim();
+            if (pasta == "") { Aviso("Escolha a pasta do projeto Maven", "err"); return; }
+            var perfilAberto = atual;
+            try
+            {
+                var encontrados = await Task.Run(() => Projetos.Listar(pasta));
+                if (perfilAberto != atual) return;
+                if (encontrados.Count == 0 || encontrados.All(p => p.Erro != null))
+                    throw new ErroRunner("Nenhum projeto Maven válido encontrado nessa pasta");
+                LembrarArtefatos();
+                foreach (var p in encontrados.Where(p => p.Erro == null)) selProj.Add(p.Repo);
+                novoProjetoDir.Text = "";
+                MarcarSujo();
+                Redescobrir(false, "projeto adicionado");
+            }
+            catch (Exception ex) { Aviso(ex.Message, "err"); }
+        };
 
         prepararTomcat = Ui.Chk("Preparar automaticamente antes de iniciar (pula Maven se nada mudou)", true);
         syncTomcatAuto = Ui.Chk("Sincronizar alterações automaticamente com o Tomcat no ar", true);
@@ -107,7 +128,8 @@ sealed partial class Janela
             if (e.Property == TextBox.TextProperty && !projetosDir.IsFocused && !preenchendo && (projetosDir.Text ?? "").Trim() != descobertosDe) Redescobrir(true);
         };
         return Rolavel(
-            Ui.Bloco("Projetos", null, direita, projInfo, Ui.Campo("Pasta de projetos deste perfil", Pasta(projetosDir, "Pasta de projetos")), projsBox),
+            Ui.Bloco("Projetos", null, direita, projInfo, Ui.Campo("Pasta de projetos deste perfil", Pasta(projetosDir, "Pasta de projetos")),
+                Ui.Campo("Adicionar projeto de outra pasta", Pasta(novoProjetoDir, "Pasta de outro projeto Maven")), adicionarProjeto, projsBox),
             Ui.Bloco("Artefatos", "war exploded dos projetos marcados", null, artsBox),
             Ui.Bloco("Desenvolvimento", "automático por padrão", null, prepararTomcat, syncTomcatAuto,
                 new Expander { Header = "Opções avançadas de publicação", Content = new StackPanel { Spacing = 10, Children = { diretoTomcat, reloadTomcat } } }));
@@ -159,18 +181,11 @@ sealed partial class Janela
                 }),
             Ui.Bloco("Aplicação", null, null,
                 Ui.Campo("URL do perfil", F(fServ, "url")),
+                Ui.Campo("Argumentos da JVM (CATALINA_OPTS, salvos neste perfil)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dvalidar-xxxxx=true")),
                 new Expander
                 {
-                    Header = "JVM e verificação de prontidão",
-                    Content = new StackPanel
-                    {
-                        Spacing = 12,
-                        Children =
-                        {
-                            Ui.Campo("Argumentos da VM (CATALINA_OPTS)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dspring.profiles.active=dev")),
-                            Ui.Campo("URL de prontidão (opcional; localhost na mesma porta)", F(fServ, "prontoUrl", "ex.: http://localhost:8080/app/health")),
-                        },
-                    },
+                    Header = "Verificação de prontidão",
+                    Content = Ui.Campo("URL de prontidão (opcional; localhost na mesma porta)", F(fServ, "prontoUrl", "ex.: http://localhost:8080/app/health")),
                 }));
     }
 
@@ -354,6 +369,7 @@ sealed partial class Janela
                     Encher(fServ, p);
                     PlaceholdersServidor();
                     projetosDir.Text = JsonAux.Txt(p, "projetosDir") ?? "";
+                    novoProjetoDir.Text = "";
                     prepararTomcat.IsChecked = p["prepararAoIniciar"]?.GetValue<bool>() == true;
                     syncTomcatAuto.IsChecked = p["syncAutomatico"]?.GetValue<bool>() == true;
                     diretoTomcat.IsChecked = p["publicacaoDireta"]?.GetValue<bool>() == true;
@@ -456,7 +472,12 @@ sealed partial class Janela
                 if (descobertaOk && descobertosDe != null)
                 {
                     p["projetos"] = new JsonArray(descobertos.Where(x => selProj.Contains(x.Repo)).Select(x => (JsonNode)x.Repo).ToArray());
-                    p["artefatos"] = new JsonArray(cartoesArt.Select(c => (JsonNode)LerCartao(c)).ToArray());
+                    var visiveis = new HashSet<string>(cartoesArt.Select(c => Chave(c.Repo, c.Modulo)));
+                    var artefatos = cartoesArt.Select(c => (JsonNode)LerCartao(c))
+                        .Concat(artsPerfil.Where(kv => !visiveis.Contains(kv.Key) &&
+                            selProj.Contains(JsonAux.Txt(kv.Value, "repo") ?? ""))
+                            .Select(kv => (JsonNode)kv.Value.DeepClone())).ToArray();
+                    p["artefatos"] = new JsonArray(artefatos);
                 }
                 break;
         }
@@ -490,7 +511,7 @@ sealed partial class Janela
         if (TipoDe(p) == "war" && arts.Any(a => JsonAux.Txt(a, "war") == null)) throw new ErroRunner("war sem arquivo (aba Pacotes)");
         // war sem contexto = nome do arquivo (app.war -> /app), igual ao runner
         var ctx = arts.Where(a => JsonAux.NaoFalso(a, "ativo"))
-            .Select(a => JsonAux.Txt(a, "contexto") ?? (JsonAux.Txt(a, "war") is { } w ? "/" + Path.GetFileNameWithoutExtension(w) : "")).ToList();
+            .Select(a => (JsonAux.Txt(a, "contexto") ?? (JsonAux.Txt(a, "war") is { } w ? "/" + Path.GetFileNameWithoutExtension(w) : "")).Trim('/').Replace('/', '#')).ToList();
         if (ctx.Distinct(StringComparer.OrdinalIgnoreCase).Count() != ctx.Count) throw new ErroRunner("dois artefatos marcados com o mesmo contexto");
     }
 
@@ -503,7 +524,7 @@ sealed partial class Janela
         var perfil = atual;
         try
         {
-            var l = await Task.Run(() => Projetos.Listar(dir));
+            var l = await Task.Run(() => Projetos.Listar(dir, selProj.ToArray()));
             if (perfil != atual) return;
             descobertos = l;
             descobertaOk = true;
@@ -539,6 +560,7 @@ sealed partial class Janela
             chip.Margin = new Thickness(0, 0, 8, 8);
             if (marcado) chip.Res(Border.BorderBrushProperty, "Acc");
             if (p.Artefatos.Count == 0) chip.Opacity = 0.7;
+            if (p.Erro != null) chip.Dica(p.Erro);
             var repo = p.Repo;
             chk.Click += (_, _) =>
             {
@@ -560,6 +582,7 @@ sealed partial class Janela
         if (marcados.Count == 0) { artsBox.Children.Add(Vazio("Marque um projeto acima.")); return; }
         foreach (var p in marcados)
         {
+            if (p.Erro != null) { artsBox.Children.Add(Vazio(p.Nome + ": " + p.Erro + " (artefatos salvos preservados)")); continue; }
             if (p.Artefatos.Count == 0) { artsBox.Children.Add(Vazio(p.Nome + ": nenhum módulo war.")); continue; }
             foreach (var d in p.Artefatos) artsBox.Children.Add(NovoCartaoArt(p, d).Raiz);
         }

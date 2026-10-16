@@ -16,33 +16,56 @@ public sealed class ProjetoDescoberto
     public string Nome { get; init; } = "";
     public string Repo { get; init; } = "";
     public List<ArtefatoDescoberto> Artefatos { get; init; } = [];
+    public string? Erro { get; init; }
 }
 
 /// <summary>Repositórios Maven em projetosDir e os módulos war de cada um (o "war exploded" do IntelliJ).</summary>
 public static class Projetos
 {
     /// <summary><paramref name="dir"/> = pasta de projetos do perfil; vazio = PROJETOS_DIR do .env (bloco global).</summary>
-    public static List<ProjetoDescoberto> Listar(string? dir = null)
+    /// <summary>
+    /// Descobre a pasta padrão e também os repositórios selecionados explicitamente no perfil.
+    /// Repositórios externos inacessíveis continuam na lista para que a UI nunca apague o perfil.
+    /// </summary>
+    public static List<ProjetoDescoberto> Listar(string? dir = null, IEnumerable<string>? selecionados = null)
     {
-        var raiz = !string.IsNullOrWhiteSpace(dir) ? dir.Trim()
-            : JsonAux.Txt(Config.Ler(), "projetosDir") ?? throw new ErroRunner("defina a pasta de projetos (neste perfil ou em Ajustes)");
-        if (!Directory.Exists(raiz)) throw new ErroRunner("pasta de projetos não existe: " + raiz);
-        // Aceita tanto uma pasta contendo vários repositórios como o próprio repositório Maven.
-        // No reactor, DescobrirWars percorre os módulos declarados pelo pom.xml pai.
-        string[] repos = File.Exists(Path.Combine(raiz, "pom.xml"))
-            ? [raiz]
-            : Directory.EnumerateDirectories(raiz)
-                .Where(d => File.Exists(Path.Combine(d, "pom.xml")))
-                .ToArray();
-        return repos
-            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-            .Select(repo =>
+        var comparer = So.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var escolhidos = (selecionados ?? []).Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => Path.GetFullPath(s.Trim())).Distinct(comparer).ToArray();
+        var raiz = !string.IsNullOrWhiteSpace(dir) ? dir.Trim() : JsonAux.Txt(Config.Ler(), "projetosDir");
+        if (string.IsNullOrWhiteSpace(raiz) && escolhidos.Length == 0)
+            throw new ErroRunner("defina a pasta de projetos (neste perfil ou em Ajustes)");
+        var repos = new HashSet<string>(comparer);
+        if (!string.IsNullOrWhiteSpace(raiz))
+        {
+            raiz = Path.GetFullPath(raiz);
+            if (!Directory.Exists(raiz))
             {
-                var lista = new List<ArtefatoDescoberto>();
-                DescobrirWars(repo, "", lista, new HashSet<string>(So.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal));
+                if (escolhidos.Length == 0) throw new ErroRunner("pasta de projetos não existe: " + raiz);
+            }
+            else if (File.Exists(Path.Combine(raiz, "pom.xml"))) repos.Add(raiz);
+            else
+                foreach (var d in Directory.EnumerateDirectories(raiz))
+                    if (File.Exists(Path.Combine(d, "pom.xml"))) repos.Add(Path.GetFullPath(d));
+        }
+        foreach (var repo in escolhidos) repos.Add(repo);
+        return repos.OrderBy(d => d, comparer).Select(repo =>
+        {
+            var lista = new List<ArtefatoDescoberto>();
+            if (!Directory.Exists(repo))
+                return new ProjetoDescoberto { Nome = Path.GetFileName(repo), Repo = repo, Erro = "Pasta indisponível: " + repo };
+            if (!File.Exists(Path.Combine(repo, "pom.xml")))
+                return new ProjetoDescoberto { Nome = Path.GetFileName(repo), Repo = repo, Erro = "Projeto Maven sem pom.xml: " + repo };
+            try
+            {
+                DescobrirWars(repo, "", lista, new HashSet<string>(comparer));
                 return new ProjetoDescoberto { Nome = Path.GetFileName(repo), Repo = repo, Artefatos = lista };
-            })
-            .ToList();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return new ProjetoDescoberto { Nome = Path.GetFileName(repo), Repo = repo, Erro = "Não foi possível ler o projeto: " + e.Message };
+            }
+        }).ToList();
     }
 
     static void DescobrirWars(string repo, string rel, List<ArtefatoDescoberto> lista, HashSet<string> visitados)
