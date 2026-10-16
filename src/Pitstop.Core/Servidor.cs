@@ -120,7 +120,7 @@ public sealed class Servidor(Runner runner, int porta)
                 return;
             }
             // ?dir= pasta de projetos do perfil (vazio = PROJETOS_DIR do .env)
-            if (get && url == "/api/projetos") { await Responder(res, 200, Projetos.Listar(req.Query["dir"].ToString())); return; }
+            if (get && url == "/api/projetos") { await Responder(res, 200, Projetos.Listar(req.Query["dir"].ToString(), req.Query["repos"].Select(r => r ?? ""))); return; }
             // seletor de classe da tela: classes com main nos fontes do módulo (?modulo=<pasta com pom.xml>)
             if (get && url == "/api/mains")
             {

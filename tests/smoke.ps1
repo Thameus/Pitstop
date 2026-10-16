@@ -257,6 +257,18 @@ try {
     $parent = $http.GetStringAsync("$base/api/projetos?dir=$([Uri]::EscapeDataString($work))").GetAwaiter().GetResult() | ConvertFrom-Json
     if (@($parent | Where-Object nome -eq 'maven-sample').Count -ne 1) { throw 'Maven parent directory not discovered' }
 
+    # Issues #22 e #23: dois repos em pastas distintas e repo offline sem perder a seleção.
+    $other = Join-Path $tmp 'other-workspace\repo-two'
+    New-Item -ItemType Directory -Force $other | Out-Null
+    Set-Content -Path (Join-Path $other 'pom.xml') -Encoding UTF8 -Value '<project><modelVersion>4.0.0</modelVersion><groupId>test</groupId><artifactId>repo-two</artifactId><version>1</version><packaging>war</packaging></project>'
+    $offline = Join-Path $tmp 'other-workspace\offline'
+    $urlMulti = "$base/api/projetos?dir=$([Uri]::EscapeDataString($mavenDir))&repos=$([Uri]::EscapeDataString($other))&repos=$([Uri]::EscapeDataString($mavenDir))&repos=$([Uri]::EscapeDataString($offline))"
+    $multi = $http.GetStringAsync($urlMulti).GetAwaiter().GetResult() | ConvertFrom-Json
+    if (@($multi).Count -ne 3) { throw 'independent repositories were not merged/deduplicated' }
+    if (@($multi | Where-Object { $_.repo -eq $other -and @($_.artefatos).Count -eq 1 }).Count -ne 1) { throw 'second independent Maven project missing' }
+    if (@($multi | Where-Object { $_.repo -eq $offline -and $_.erro }).Count -ne 1) { throw 'offline selected repository not preserved' }
+
+
     # Cadastro guiado: Maven/navegação por pasta e npm, somente a partir da UI local.
     $inspectNoHeader = $http.GetAsync("$base/api/inspecionar?dir=$([Uri]::EscapeDataString($mavenDir))").GetAwaiter().GetResult()
     if ([int]$inspectNoHeader.StatusCode -ne 403) { throw 'inspection without X-PIT should return 403' }

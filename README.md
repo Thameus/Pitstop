@@ -307,3 +307,9 @@ As ações disponíveis dependem do tipo de perfil. Um perfil Comando não expõ
 Apache 2.0. Consulte `LICENSE` e `NOTICE`.
 
 Código-fonte e releases: https://github.com/Thameus/Pitstop
+
+## Issues #22 e #23 — múltiplos projetos e argumentos JVM
+
+Na aba **Artefatos** de um perfil Tomcat, o botão **Adicionar projeto** permite selecionar repositórios Maven em pastas independentes. Eles compartilham o mesmo Tomcat e a mesma porta HTTP, mas cada aplicação deve usar um contexto exclusivo. A lista sobrevive à reinicialização e mantém referências a projetos temporariamente indisponíveis. Na aba **Servidor**, **Argumentos da JVM** salva opções como `-Dvalidar-xxxxx=true` em `vmArgs` por perfil, aplicadas nos modos Iniciar, Reiniciar e Debug.
+
+Para testar em um ambiente fictício e isolado, execute `powershell -File tests/abrir-cenario-22-23.ps1`. Detalhes e roteiro de testes: [docs/ISSUES-22-23-TESTES.md](docs/ISSUES-22-23-TESTES.md).

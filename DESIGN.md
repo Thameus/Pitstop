@@ -570,3 +570,11 @@ Antes de criar um novo componente ou estilo, verificar se já existe:
 - dialog padrão.
 
 Se um novo padrão for realmente necessário, documentá-lo aqui e implementá-lo tanto quanto possível nas duas UIs.
+
+## Evolução — Issues #22 e #23
+
+- **Artefatos:** manter pasta principal como padrão, mas apresentar ação explícita **Adicionar projeto** para repositórios Maven externos; remoção lógica é feita desmarcando o projeto, sem apagar arquivos.
+- **Identidade:** exibir o caminho completo como tooltip; projetos homônimos são distinguidos pelo caminho absoluto. Repositórios temporariamente indisponíveis permanecem na seleção com aviso.
+- **Persistência:** nunca substituir silenciosamente artefatos salvos que não possam ser redescobertos; duplicidades de contexto continuam proibidas.
+- **Servidor:** o campo persistente de **Argumentos da JVM (CATALINA_OPTS)** fica visível na tela principal; prontidão HTTP permanece avançada. O campo não substitui o comando Maven nem argumentos por aplicação.
+- **Paridade:** mesmo fluxo de inclusão e salvamento nas interfaces desktop e web.

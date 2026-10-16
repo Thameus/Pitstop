@@ -77,6 +77,7 @@ try
     File.WriteAllText(Path.Combine(webinf, "web.xml"), "<web-app/>");
     File.WriteAllText(Path.Combine(webinf, "lib", "dependencia.jar"), "teste");
     File.WriteAllText(Path.Combine(tomcat, "bin", "catalina.bat"), "@echo off");
+    File.WriteAllText(Path.Combine(tomcat, "bin", "catalina.sh"), "#!/bin/sh\nexit 0\n");
     File.WriteAllText(Path.Combine(tomcat, "conf", "server.xml"),
         "<Server port=\"8005\"><Service name=\"Catalina\"><Connector port=\"8080\" protocol=\"HTTP/1.1\" /></Service></Server>");
     using (var jar = System.IO.Compression.ZipFile.Open(Path.Combine(tomcat, "lib", "catalina.jar"), System.IO.Compression.ZipArchiveMode.Create))
@@ -146,6 +147,90 @@ try
     Checar(!legado.PrepararAoIniciar && !legado.SyncAutomatico, "preservação de perfil legado");
     Checar(novo.PrepararAoIniciar && novo.SyncAutomatico, "preparação e sync de perfil novo");
     Console.WriteLine("OK compatibilidade dos perfis antigos");
+
+    // Issues #22 e #23: dois repositórios independentes, contextos isolados e JVM persistente.
+    var repoA = Path.Combine(raiz, "workspace-a", "mesmo-nome");
+    var repoB = Path.Combine(raiz, "workspace-b", "mesmo-nome");
+    Directory.CreateDirectory(repoA);
+    Directory.CreateDirectory(repoB);
+    Pom(repoA, "war");
+    Pom(repoB, "war");
+    var combinados = Projetos.Listar(repoA, [repoB, repoB, repoA]);
+    Checar(combinados.Count == 2, "dois caminhos independentes, sem duplicar repositórios");
+    Checar(combinados.All(x => x.Erro == null && x.Artefatos.Count == 1), "artefatos Maven de ambos os discos");
+    Checar(combinados.Select(x => x.Repo).Distinct(So.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).Count() == 2,
+        "projetos com o mesmo nome devem manter identidades por caminho");
+    var perdido = Path.Combine(raiz, "workspace-offline", "projeto");
+    var comAusente = Projetos.Listar(repoA, [repoB, perdido]);
+    Checar(comAusente.Count == 3 && comAusente.Single(x => x.Repo == perdido).Erro != null,
+        "projeto temporariamente indisponível deve continuar visível para preservar configuração");
+    var docA = Path.Combine(repoA, "target", "app-a");
+    var docB = Path.Combine(repoB, "target", "app-b");
+    Directory.CreateDirectory(Path.Combine(docA, "WEB-INF"));
+    Directory.CreateDirectory(Path.Combine(docB, "WEB-INF"));
+    var artA = new Artefato { Repo = repoA, Contexto = "/sistema", Build = "mvn package", DocBase = docA };
+    var artB = new Artefato { Repo = repoB, Contexto = "/api", Build = "mvn package", DocBase = docB };
+    var multi = new Perfil
+    {
+        Nome = "MultiRepositorio", Tipo = "tomcat", Home = tomcat, JavaHome = tomcat, ConfOrigem = Path.Combine(tomcat, "conf"),
+        Base = Path.Combine(raiz, "base-multirepo"), Cache = Path.Combine(raiz, "cache-multirepo"),
+        Porta = 18080, PortaShutdown = 18005, Artefatos = [artA, artB]
+    };
+    var conflito = new Perfil
+    {
+        Nome = "Conflito", Tipo = "tomcat", Home = tomcat, JavaHome = tomcat,
+        ConfOrigem = Path.Combine(tomcat, "conf"), Base = Path.Combine(raiz, "base-conflito"),
+        Artefatos = [artA, new Artefato { Repo = repoB, Contexto = "/SISTEMA", DocBase = docB }]
+    };
+    var bloqueouConflito = false;
+    try { Tomcat.PrepararBase(conflito); }
+    catch (ErroRunner) { bloqueouConflito = true; }
+    Checar(bloqueouConflito, "contextos duplicados por caixa devem falhar antes da publicação");
+    var publicadosMulti = Tomcat.PrepararBase(multi);
+    Checar(publicadosMulti.Count == 2 && publicadosMulti.Any(x => x.Contexto == "/sistema") &&
+        publicadosMulti.Any(x => x.Contexto == "/api"), "mesmo Tomcat deve publicar dois contextos");
+    Checar(File.Exists(Path.Combine(multi.Base, "conf", "Catalina", "localhost", "sistema.xml")) &&
+        File.Exists(Path.Combine(multi.Base, "conf", "Catalina", "localhost", "api.xml")),
+        "dois descritores Tomcat devem coexistir");
+    PreparacaoTomcat.Registrar(multi);
+    Checar(PreparacaoTomcat.Atualizado(multi), "cache Maven para dois repositórios");
+    File.WriteAllText(Path.Combine(repoB, "arquivo-novo.txt"), "alterado");
+    Checar(!PreparacaoTomcat.Atualizado(multi), "alteração no segundo repositório invalida cache conjunto");
+    Console.WriteLine("OK #22 dois repositórios, descoberta, indisponibilidade, publicação e cache");
+
+    var configJvm = System.Text.Json.Nodes.JsonNode.Parse("""
+        {"perfis":{"dev":{"tipo":"tomcat","vmArgs":"-Xmx512m -Dvalidar-xxxxx=true","artefatos":[]},
+                   "prod":{"tipo":"tomcat","vmArgs":"-Dvalidar-xxxxx=false","artefatos":[]}}}
+        """) as System.Text.Json.Nodes.JsonObject ?? throw new Exception("fixture JVM inválida");
+    Checar(Config.LerPerfil(configJvm, "dev").VmArgs == "-Xmx512m -Dvalidar-xxxxx=true" &&
+        Config.LerPerfil(configJvm, "prod").VmArgs == "-Dvalidar-xxxxx=false",
+        "argumentos JVM persistem por perfil sem compartilhar valores");
+    var baseJvm = Path.Combine(raiz, "base-jvm");
+    Directory.CreateDirectory(baseJvm);
+    var script = Path.Combine(tomcat, "bin", So.Catalina);
+    if (So.Windows)
+        File.WriteAllText(script, "@echo off\r\necho %CATALINA_OPTS% > \"%CATALINA_BASE%\\jvm-args.txt\"\r\n");
+    else
+        File.WriteAllText(script, "#!/bin/sh\nprintf '%s' \"$CATALINA_OPTS\" > \"$CATALINA_BASE/jvm-args.txt\"\n");
+    var perfilJvm = new Perfil
+    {
+        Nome = "Jvm", Tipo = "tomcat", Home = tomcat, JavaHome = tomcat, Base = baseJvm,
+        VmArgs = Config.LerPerfil(configJvm, "dev").VmArgs
+    };
+    using (var filho = Tomcat.Catalina(perfilJvm, "run", false, false))
+    {
+        Checar(filho.WaitForExit(10000) && filho.ExitCode == 0, "script Tomcat simulado deve terminar");
+    }
+    Checar(File.ReadAllText(Path.Combine(baseJvm, "jvm-args.txt")).Contains("-Dvalidar-xxxxx=true"),
+        "CATALINA_OPTS deve chegar ao script Tomcat");
+    using (var filho = Tomcat.Catalina(perfilJvm, "jpda run", true, false))
+    {
+        Checar(filho.WaitForExit(10000) && filho.ExitCode == 0, "Tomcat Debug simulado deve terminar");
+    }
+    Checar(File.ReadAllText(Path.Combine(baseJvm, "jvm-args.txt")).Contains("-Dvalidar-xxxxx=true"),
+        "CATALINA_OPTS deve chegar também no modo Debug");
+    Console.WriteLine("OK #23 vmArgs isolados e encaminhados ao Tomcat normal e Debug");
+
     Console.WriteLine("INTEGRATION OK");
 }
 finally

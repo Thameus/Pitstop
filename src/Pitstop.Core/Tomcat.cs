@@ -74,6 +74,10 @@ public static class Tomcat
         if (!File.Exists(Path.Combine(p.Home, "bin", So.Catalina)))
             throw new ErroRunner("Tomcat não encontrado em " + p.Home + " (falta bin/" + So.Catalina + ")");
         if (string.IsNullOrEmpty(p.JavaHome)) throw new ErroRunner("perfil " + p.Nome + ": informe o JDK (aba Servidor)");
+        var repetido = p.Artefatos.Select(a => NomeArquivoContexto(a.Contexto))
+            .GroupBy(n => n, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (repetido != null)
+            throw new ErroRunner("dois artefatos ativos usam o mesmo contexto Tomcat: " + repetido.Key);
         var origem = p.ConfOrigem!;
         foreach (var d in new[] { "conf", "logs", "temp", "work", "webapps" })
             Directory.CreateDirectory(Path.Combine(p.Base, d));

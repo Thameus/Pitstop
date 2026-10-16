@@ -43,7 +43,7 @@ try {
     } finally { $ErrorActionPreference = $oldPref }
     $pastas = ([regex]::Matches($html,'class="pasta-field"')).Count
     if ($pastas -lt 15) { throw "Seletores de pasta não renderizados: $pastas" }
-    foreach($id in @('novoDetectar','pastaDlg','p_preparar','p_syncAuto','p_direto','p_reload','prontoUrl','buildMenu','syncMenu')) {
+    foreach($id in @('novoDetectar','pastaDlg','p_preparar','p_syncAuto','p_direto','p_reload','prontoUrl','buildMenu','syncMenu','novoProjetoDir','adicionarProjeto','vmArgs')) {
         if ($html -notmatch ('id="'+$id+'"')) { throw "Controle web ausente: $id" }
     }
     Write-Host "UI SMOKE OK: $pastas campos com seletor de pasta, cadastro, automação, modo direto e menu avançado."
