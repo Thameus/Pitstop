@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -17,6 +17,8 @@ static class Program
                 return SmokeBlocker();
             if (args.Any(a => a.Equals("--smoke-update", StringComparison.OrdinalIgnoreCase)))
                 return SmokeUpdate(args);
+            if (args.Any(a => a.Equals("--smoke-rollback", StringComparison.OrdinalIgnoreCase)))
+                return SmokeRollback(args);
 
             Aplicar(args);
             return 0;
@@ -25,6 +27,7 @@ static class Program
         {
             Registrar("ERRO: " + ex);
             MostrarErro("A atualização do Pitstop falhou.\n\n" + ex.Message +
+                        "\n\nConsulte o log: " + LogArquivo +
                         "\n\nA instalação anterior foi preservada sempre que possível.");
             return 20;
         }
@@ -68,7 +71,7 @@ static class Program
                     EsperarProcesso(pid);
 
                 AguardarBloqueadores(destino);
-                AplicarPayload(origem, destino);
+                AplicarPayload(origem, destino, trabalho);
                 AtualizarRegistro(destino);
             }
             finally
@@ -150,60 +153,109 @@ static class Program
         return candidatos[0];
     }
 
-    static void AplicarPayload(string origem, string destino)
+    // A transação prepara todas as pastas ANTES da primeira troca. Em qualquer falha,
+    // desfaz as trocas já efetuadas na ordem inversa e restaura os arquivos da raiz.
+    static void AplicarPayload(string origem, string destino, string trabalho, bool simularFalha = false)
     {
-        foreach (var nome in new[] { "app", "web", "third-party" })
-        {
-            var fonte = Path.Combine(origem, nome);
-            if (Directory.Exists(fonte)) SubstituirDiretorio(fonte, Path.Combine(destino, nome));
-        }
-
-        foreach (var arquivo in Directory.GetFiles(origem))
-        {
-            var alvo = Path.Combine(destino, Path.GetFileName(arquivo));
-            IoComRetry(() => File.Copy(arquivo, alvo, true), "Copiar " + Path.GetFileName(arquivo));
-        }
-    }
-
-    static void SubstituirDiretorio(string fonte, string alvo)
-    {
-        var nova = alvo + ".update-new";
-        var antiga = alvo + ".update-old";
-
-        if (Directory.Exists(nova))
-            IoComRetry(() => Directory.Delete(nova, true), "Limpar " + Path.GetFileName(nova));
-        if (Directory.Exists(antiga))
-            IoComRetry(() => Directory.Delete(antiga, true), "Limpar " + Path.GetFileName(antiga));
-
-        CopiarDiretorio(fonte, nova);
-
-        var tinhaAntiga = Directory.Exists(alvo);
-        if (tinhaAntiga)
-            IoComRetry(() => Directory.Move(alvo, antiga), "Liberar " + Path.GetFileName(alvo));
+        var id = Guid.NewGuid().ToString("N");
+        var planos = new List<(string Alvo, string Nova, string Antiga, bool Tinha)>();
+        var efetuados = new List<(string Alvo, string Nova, string Antiga, bool Tinha)>();
+        var arquivos = new List<(string Alvo, string? Backup)>();
+        var backupRaiz = Path.Combine(trabalho, "root-backup");
+        Directory.CreateDirectory(backupRaiz);
+        var sucesso = false;
+        var restaurado = false;
 
         try
         {
-            IoComRetry(() => Directory.Move(nova, alvo), "Ativar " + Path.GetFileName(alvo));
-        }
-        catch
-        {
-            try
+            foreach (var nome in new[] { "app", "web", "third-party", "docs" })
             {
-                if (Directory.Exists(alvo))
-                    IoComRetry(() => Directory.Delete(alvo, true), "Remover atualização incompleta", 8);
-                if (tinhaAntiga && Directory.Exists(antiga))
-                    IoComRetry(() => Directory.Move(antiga, alvo), "Restaurar versão anterior", 8);
+                var fonte = Path.Combine(origem, nome);
+                if (!Directory.Exists(fonte)) continue;
+                var alvo = Path.Combine(destino, nome);
+                var nova = alvo + ".update-new-" + id;
+                var antiga = alvo + ".update-old-" + id;
+                Registrar("Preparando " + nome);
+                planos.Add((alvo, nova, antiga, Directory.Exists(alvo)));
+                CopiarDiretorio(fonte, nova);
             }
-            catch { }
+
+            foreach (var fonte in Directory.GetFiles(origem))
+            {
+                var alvo = Path.Combine(destino, Path.GetFileName(fonte));
+                string? backup = null;
+                if (File.Exists(alvo))
+                {
+                    backup = Path.Combine(backupRaiz, Path.GetFileName(fonte));
+                    File.Copy(alvo, backup, true);
+                }
+                arquivos.Add((alvo, backup));
+            }
+
+            foreach (var plano in planos)
+            {
+                if (plano.Tinha)
+                    IoComRetry(() => Directory.Move(plano.Alvo, plano.Antiga), "Liberar " + plano.Alvo, plano.Alvo);
+                efetuados.Add(plano);
+                IoComRetry(() => Directory.Move(plano.Nova, plano.Alvo), "Ativar " + plano.Alvo, plano.Alvo);
+                Registrar("Ativado " + plano.Alvo);
+                if (simularFalha && efetuados.Count == 1)
+                    throw new IOException("Falha simulada após a primeira troca (teste de rollback).");
+            }
+
+            foreach (var fonte in Directory.GetFiles(origem))
+            {
+                var alvo = Path.Combine(destino, Path.GetFileName(fonte));
+                IoComRetry(() => File.Copy(fonte, alvo, true), "Atualizar " + alvo, alvo);
+            }
+
+            sucesso = true;
+        }
+        catch (Exception falha)
+        {
+            Registrar("Aplicação falhou; restaurando a versão anterior: " + falha);
+            var erros = new List<Exception>();
+            foreach (var (alvo, backup) in arquivos.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (backup != null) File.Copy(backup, alvo, true);
+                    else if (File.Exists(alvo)) File.Delete(alvo);
+                }
+                catch (Exception e) { erros.Add(e); Registrar("Rollback arquivo " + alvo + ": " + e); }
+            }
+            foreach (var (alvo, nova, antiga, tinha) in efetuados.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (Directory.Exists(alvo))
+                        IoComRetry(() => Directory.Delete(alvo, true), "Desfazer " + alvo, alvo, 8);
+                    if (tinha && Directory.Exists(antiga))
+                        IoComRetry(() => Directory.Move(antiga, alvo), "Restaurar " + alvo, alvo, 8);
+                }
+                catch (Exception e) { erros.Add(e); Registrar("Rollback pasta " + alvo + ": " + e); }
+            }
+            restaurado = erros.Count == 0;
+            if (!restaurado)
+                throw new IOException("Falha na atualização E na restauração; os backups .update-old foram mantidos. " +
+                    "Consulte o log em " + LogArquivo + ". Causa: " + falha.Message, new AggregateException(erros));
             throw;
         }
-
-        try
+        finally
         {
-            if (Directory.Exists(antiga))
-                IoComRetry(() => Directory.Delete(antiga, true), "Limpar versão anterior", 8);
+            // Não apaga backups se a restauração ficou incompleta.
+            if (sucesso || restaurado)
+            {
+                foreach (var (_, nova, antiga, _) in planos)
+                {
+                    try { if (Directory.Exists(nova)) Directory.Delete(nova, true); }
+                    catch (Exception e) { Registrar("Limpeza adiada " + nova + ": " + e.Message); }
+                    if (sucesso)
+                        try { if (Directory.Exists(antiga)) Directory.Delete(antiga, true); }
+                        catch (Exception e) { Registrar("Versão anterior retida em " + antiga + ": " + e.Message); }
+                }
+            }
         }
-        catch { }
     }
 
     static void CopiarDiretorio(string origem, string destino)
@@ -212,32 +264,31 @@ static class Program
         foreach (var arquivo in Directory.GetFiles(origem))
         {
             var alvo = Path.Combine(destino, Path.GetFileName(arquivo));
-            IoComRetry(() => File.Copy(arquivo, alvo, true), "Copiar " + Path.GetFileName(arquivo));
+            IoComRetry(() => File.Copy(arquivo, alvo, true), "Copiar " + Path.GetFileName(arquivo), alvo);
         }
         foreach (var dir in Directory.GetDirectories(origem))
             CopiarDiretorio(dir, Path.Combine(destino, Path.GetFileName(dir)));
     }
 
-    static void IoComRetry(Action acao, string descricao, int tentativas = 20)
+    static void IoComRetry(Action acao, string descricao, string caminho, int tentativas = 20)
     {
         Exception? ultima = null;
         for (var tentativa = 1; tentativa <= tentativas; tentativa++)
         {
-            try
-            {
-                acao();
-                return;
-            }
-            catch (IOException ex) { ultima = ex; }
-            catch (UnauthorizedAccessException ex) { ultima = ex; }
-
+            try { acao(); return; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { ultima = e; }
             if (tentativa < tentativas) Thread.Sleep(250);
         }
 
-        throw new IOException(
-            descricao + " falhou porque o Windows ainda está usando algum arquivo. " +
-            "Feche terminais, Explorador ou outro processo aberto dentro da pasta do Pitstop e tente novamente.",
-            ultima);
+        var bloqueadores = WindowsBlockers.Listar(caminho);
+        if (bloqueadores.Length == 0 && Directory.Exists(Path.GetDirectoryName(caminho)))
+            bloqueadores = WindowsBlockers.Listar(Path.GetDirectoryName(caminho)!);
+        var detalhes = bloqueadores.Length == 0
+            ? "Nenhum processo identificado automaticamente (verifique terminais abertos nessa pasta, antivirus ou sincronizadores)."
+            : "Processos que podem estar bloqueando: " + string.Join(", ", bloqueadores);
+        var mensagem = descricao + " falhou. " + detalhes + " Log: " + LogArquivo;
+        Registrar(mensagem + Environment.NewLine + ultima);
+        throw new IOException(mensagem, ultima);
     }
 
     static void AguardarBloqueadores(string destino)
@@ -353,14 +404,19 @@ static class Program
         return null;
     }
 
+    // Persistente fora da instalação e do diretório de downloads, inclusive quando ocorre falha.
+    static string LogArquivo => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Pitstop", "updates", "updater.log");
+
     static void Registrar(string texto)
     {
         try
         {
-            var dir = AppContext.BaseDirectory;
-            File.AppendAllText(Path.Combine(dir, "update.log"),
-                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + texto + Environment.NewLine,
-                new UTF8Encoding(false));
+            Directory.CreateDirectory(Path.GetDirectoryName(LogArquivo)!);
+            File.AppendAllText(LogArquivo,
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " [PID " + Environment.ProcessId + "] " +
+                texto + Environment.NewLine, new UTF8Encoding(false));
         }
         catch { }
     }
@@ -444,6 +500,47 @@ static class Program
         {
             Environment.CurrentDirectory = cwd;
             try { if (Directory.Exists(destino)) Directory.Delete(destino, true); } catch { }
+        }
+    }
+
+
+    static int SmokeRollback(string[] args)
+    {
+        var pacote = Argumento(args, "--package");
+        var sha = Argumento(args, "--sha256");
+        if (string.IsNullOrWhiteSpace(pacote) || string.IsNullOrWhiteSpace(sha)) return 51;
+        var raiz = Path.Combine(Path.GetTempPath(), "pitstop-rollback-smoke-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            VerificarSha256(pacote, sha);
+            var origem = Path.Combine(raiz, "payload");
+            var destino = Path.Combine(raiz, "instalado");
+            Directory.CreateDirectory(Path.Combine(destino, "app"));
+            Directory.CreateDirectory(Path.Combine(destino, "web"));
+            Directory.CreateDirectory(Path.Combine(destino, "config"));
+            File.WriteAllText(Path.Combine(destino, "app", "old.txt"), "old app");
+            File.WriteAllText(Path.Combine(destino, "web", "old.html"), "old web");
+            File.WriteAllText(Path.Combine(destino, "config", "perfis.json"), "{\"perfis\":{\"ok\":{}}}");
+            File.WriteAllText(Path.Combine(destino, ".env"), "MANTER=1");
+            ExtrairZipSeguro(pacote, origem);
+            var fonte = EncontrarRaizPayload(origem);
+            var provocouFalha = false;
+            try { AplicarPayload(fonte, destino, raiz, simularFalha: true); }
+            catch (IOException) { provocouFalha = true; }
+
+            if (!provocouFalha) return 52;
+            if (!File.Exists(Path.Combine(destino, "app", "old.txt")) ||
+                File.Exists(Path.Combine(destino, "app", "Pitstop.exe"))) return 53;
+            if (!File.Exists(Path.Combine(destino, "web", "old.html"))) return 54;
+            if (!File.ReadAllText(Path.Combine(destino, "config", "perfis.json")).Contains("ok") ||
+                File.ReadAllText(Path.Combine(destino, ".env")) != "MANTER=1") return 55;
+            if (Directory.GetDirectories(destino, "*.update-old-*").Length != 0) return 56;
+            return 0;
+        }
+        catch (Exception e) { Registrar("Smoke rollback: " + e); return 57; }
+        finally
+        {
+            try { if (Directory.Exists(raiz)) Directory.Delete(raiz, true); } catch { }
         }
     }
 

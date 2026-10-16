@@ -95,6 +95,9 @@ jobs:
           - Integracao IA: MCP stdio integrado ao pit (19 ferramentas), catalogo JSON e guias AGENTS.md/CLAUDE.md.
           - Perfis iniciados via terminal ou outra instancia do Pitstop sao reconhecidos na interface.
           - Preparacao Maven e sincronizacao inteligente, com compatibilidade para perfis antigos.
+          - Atualizacao Windows: rollback do conjunto de pastas, log persistente e diagnostico de arquivos em uso.
+          - Projetos Maven de pastas independentes, cada um com contexto Tomcat proprio (#22).
+          - Argumentos JVM persistidos por perfil (#23).
           - O instalador pode preparar JDK, Tomcat, Maven e Node.js de forma opcional.
           - Windows: esta versao ainda nao possui assinatura Authenticode; o SmartScreen pode exibir um aviso.
           EOF

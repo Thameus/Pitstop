@@ -313,3 +313,12 @@ Código-fonte e releases: https://github.com/Thameus/Pitstop
 Na aba **Artefatos** de um perfil Tomcat, o botão **Adicionar projeto** permite selecionar repositórios Maven em pastas independentes. Eles compartilham o mesmo Tomcat e a mesma porta HTTP, mas cada aplicação deve usar um contexto exclusivo. A lista sobrevive à reinicialização e mantém referências a projetos temporariamente indisponíveis. Na aba **Servidor**, **Argumentos da JVM** salva opções como `-Dvalidar-xxxxx=true` em `vmArgs` por perfil, aplicadas nos modos Iniciar, Reiniciar e Debug.
 
 Para testar em um ambiente fictício e isolado, execute `powershell -File tests/abrir-cenario-22-23.ps1`. Detalhes e roteiro de testes: [docs/ISSUES-22-23-TESTES.md](docs/ISSUES-22-23-TESTES.md).
+
+## Versão 3.0.8
+
+- **Issue #22:** artefatos WAR de repositórios Maven independentes podem coexistir no mesmo perfil Tomcat, com contextos HTTP distintos. Projetos externos temporariamente indisponíveis não apagam sua configuração.
+- **Issue #23:** argumentos JVM do Tomcat, como `-Dvalidar-xxxxx=true`, são salvos individualmente em cada perfil e aplicados também ao modo Debug.
+- **Atualização Windows:** helper externo com preparação prévia, rollback conjunto das pastas, diagnóstico de caminhos/processos em uso e log persistente, sem alterar a instalação atual durante os testes.
+- Testes: integração multi-repositório, smoke de API/UI e testes do pacote com falha de atualização deliberadamente injetada.
+
+Para detalhes da atualização e limitações de arquivos bloqueados, consulte `docs/ATUALIZADOR-V3.0.8.md`.
