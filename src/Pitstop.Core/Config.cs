@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Pitstop;
@@ -73,6 +74,8 @@ public sealed class Perfil
     public string PathExtra { get; init; } = "";
     public bool CompilarAntes { get; init; }
     public string ProntoLog { get; init; } = "";
+    /// <summary>Texto literal; a primeira linha que o contém marca falha sem parar o processo.</summary>
+    public string FalhaLog { get; init; } = "";
     public string Cache { get; init; } = "";
 
     // pacote Java (tipo "zip"); usa também JavaHome, VmArgs, Args, PortaDebug, PathExtra, ProntoLog e Trabalho
@@ -106,6 +109,8 @@ public sealed class Perfil
     public bool AbrirNavegadorPronto { get; init; }
     public bool AutoIniciar { get; init; }
     public int? TimeoutExecucaoSeg { get; init; }
+    /// <summary>Parada opt-in contada somente depois de a execução do Runner ficar pronta.</summary>
+    public int? AutoPararAposSeg { get; init; }
 }
 
 /// <summary>config/perfis.json + globais do .env (o .env manda sobre o bloco global; o perfil ainda sobrescreve).</summary>
@@ -135,13 +140,34 @@ public static class Config
     public static JsonObject Ler()
     {
         GarantirArquivo();
-        var cfg = JsonNode.Parse(File.ReadAllText(Arquivo, Encoding.UTF8)) as JsonObject
+        var cfg = LerArquivo() as JsonObject
                   ?? throw new ErroRunner("config inválida: " + Arquivo);
         ValidarNomesPerfis(cfg);
         foreach (var (k, e) in GlobaisEnv)
             if (Env.Txt(e) is { } v) cfg[k] = v;
         cfg["_versao"] = Versao();
         return cfg;
+    }
+
+    static JsonNode? LerArquivo()
+    {
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(Arquivo, Encoding.UTF8));
+        }
+        catch (JsonException e)
+        {
+            long? linha = e.LineNumber is long l ? l + 1 : null;
+            long? coluna = e.BytePositionInLine is long c ? c + 1 : null;
+            var posicao = linha is null
+                ? ""
+                : $" (linha {linha}, coluna {coluna})";
+            var backup = Arquivo + ".bak";
+            var aviso = File.Exists(backup)
+                ? $" Existe um backup em {backup}; restaure-o ou corrija o arquivo."
+                : "";
+            throw new ErroRunner($"perfis.json inválido: {Arquivo}{posicao}: {e.Message}{aviso}");
+        }
     }
 
     /// <summary>Data de gravação do perfis.json. A tela devolve no PUT: mudou desde a leitura = gravação recusada.</summary>
@@ -157,6 +183,7 @@ public static class Config
         if (cfg is not JsonObject obj || obj["perfis"] is null) throw new ErroRunner("config inválida: falta \"perfis\"");
         ValidarNomesPerfis(obj);
         ValidarPerfisComando(obj);
+        ValidarAutoParada(obj);
         if (JsonAux.Txt(obj, "_versao") is { } lida && lida != Versao())
             throw new ErroRunner("perfis.json mudou fora desta tela (outra aba ou edição manual): recarregue a tela (F5) e refaça a alteração");
         var salvar = (JsonObject)obj.DeepClone();
@@ -199,15 +226,28 @@ public static class Config
                 ComandoApp.Validar(PerfilComando(cfg, nome, p));
     }
 
+    static void ValidarAutoParada(JsonObject cfg)
+    {
+        if (cfg["perfis"] is not JsonObject perfis) return;
+        foreach (var (nome, valor) in perfis)
+            if (valor is JsonObject p && JsonAux.Num(p, "autoPararAposSeg") is int segundos && segundos <= 0)
+                throw new ErroRunner("perfil " + nome + ": autoPararAposSeg precisa ser maior que zero");
+    }
+
     /// <summary>
     /// Troca a chave do perfil no perfis.json (com .bak), mantendo a posição na lista. Lê o arquivo cru, sem os
     /// globais do .env. Devolve a versão nova.
     /// </summary>
-    public static string Renomear(string velho, string novo)
+    public static string Renomear(string velho, string novo, string? versaoLida = null)
     {
         if (!NomeValido(novo)) throw new ErroRunner("nome de perfil inválido: " + novo);
-        var raiz = JsonNode.Parse(File.ReadAllText(Arquivo, Encoding.UTF8)) as JsonObject
+        if (versaoLida is null) throw new ErroRunner("renomear exige a versão atual de perfis.json; recarregue a configuração");
+        if (versaoLida != Versao())
+            throw new ErroRunner("perfis.json mudou fora desta tela (outra aba ou edição manual): recarregue a tela (F5) e refaça a alteração");
+        var raiz = LerArquivo() as JsonObject
                    ?? throw new ErroRunner("config inválida: " + Arquivo);
+        if (versaoLida != Versao())
+            throw new ErroRunner("perfis.json mudou durante a renomeação: recarregue a tela (F5) e refaça a alteração");
         if (raiz["perfis"] is not JsonObject perfis || !perfis.ContainsKey(velho)) throw new ErroRunner("perfil não existe: " + velho);
         if (perfis.ContainsKey(novo)) throw new ErroRunner("já existe um perfil " + novo);
         var novos = new JsonObject();
@@ -217,6 +257,22 @@ public static class Config
             novos[k == velho ? novo : k] = v;
         }
         raiz["perfis"] = novos;
+        GravarAtomico(Arquivo, raiz.ToJsonString(JsonAux.Indentado) + "\n");
+        return Versao();
+    }
+
+    /// <summary>Remove somente a chave do perfil do perfis.json; bases, caches e logs nunca fazem parte desta operação.</summary>
+    public static string Remover(string nome, string? versaoLida = null)
+    {
+        if (versaoLida is null) throw new ErroRunner("remover exige a versão atual de perfis.json; recarregue a configuração");
+        if (versaoLida != Versao())
+            throw new ErroRunner("perfis.json mudou fora desta tela (outra aba ou edição manual): recarregue a tela (F5) e refaça a alteração");
+        var raiz = LerArquivo() as JsonObject
+                   ?? throw new ErroRunner("config inválida: " + Arquivo);
+        if (versaoLida != Versao())
+            throw new ErroRunner("perfis.json mudou durante a remoção: recarregue a tela (F5) e refaça a alteração");
+        if (raiz["perfis"] is not JsonObject perfis || !perfis.Remove(nome))
+            throw new ErroRunner("perfil não existe: " + nome);
         GravarAtomico(Arquivo, raiz.ToJsonString(JsonAux.Indentado) + "\n");
         return Versao();
     }
@@ -276,11 +332,13 @@ public static class Config
             VmArgs = JsonAux.Txt(p, "vmArgs") ?? "",
             Url = JsonAux.Txt(p, "url") ?? "http://localhost:" + porta + UrlContexto(todos),
             ProntoUrl = JsonAux.Txt(p, "prontoUrl"),
+            FalhaLog = JsonAux.Txt(p, "falhaLog") ?? "",
             Artefatos = todos.Where(a => a.Ativo).ToList(),
             PrepararAoIniciar = p["prepararAoIniciar"]?.GetValue<bool>() == true,
             SyncAutomatico = p["syncAutomatico"]?.GetValue<bool>() == true,
             PublicacaoDireta = p["publicacaoDireta"]?.GetValue<bool>() == true,
             ReloadAutomatico = p["reloadAutomatico"]?.GetValue<bool>() == true,
+            AutoPararAposSeg = JsonAux.Num(p, "autoPararAposSeg"),
         };
     }
 
@@ -352,6 +410,8 @@ public static class Config
             PortaDebug = JsonAux.Num(p, "portaDebug") ?? 5006,
             CompilarAntes = JsonAux.NaoFalso(p, "compilarAntes"),
             ProntoLog = JsonAux.Txt(p, "prontoLog") ?? "",
+            FalhaLog = JsonAux.Txt(p, "falhaLog") ?? "",
+            AutoPararAposSeg = JsonAux.Num(p, "autoPararAposSeg"),
             Cache = cache,
             Base = cache,
         };
@@ -383,6 +443,8 @@ public static class Config
             PathExtra = JsonAux.Txt(p, "pathExtra") ?? "",
             PortaDebug = JsonAux.Num(p, "portaDebug") ?? 5006,
             ProntoLog = JsonAux.Txt(p, "prontoLog") ?? "",
+            FalhaLog = JsonAux.Txt(p, "falhaLog") ?? "",
+            AutoPararAposSeg = JsonAux.Num(p, "autoPararAposSeg"),
             Cache = cache,
             Base = cache,
         };
@@ -430,9 +492,11 @@ public static class Config
             Porta = JsonAux.Num(p, "porta") ?? 0,
             Url = JsonAux.Txt(p, "url"),
             ProntoLog = JsonAux.Txt(p, "prontoLog") ?? "",
+            FalhaLog = JsonAux.Txt(p, "falhaLog") ?? "",
             AbrirNavegadorPronto = Sim(p, "abrirNavegadorPronto"),
             AutoIniciar = Sim(p, "autoIniciar"),
             TimeoutExecucaoSeg = JsonAux.Num(p, "timeoutExecucaoSeg"),
+            AutoPararAposSeg = JsonAux.Num(p, "autoPararAposSeg"),
             Cache = cache,
             Base = cache,
         };
@@ -457,6 +521,8 @@ public static class Config
             Porta = porta,
             Url = JsonAux.Txt(p, "url") ?? "http://localhost:" + porta + "/",
             ProntoLog = JsonAux.Txt(p, "prontoLog") ?? ProntoNpm,
+            FalhaLog = JsonAux.Txt(p, "falhaLog") ?? "",
+            AutoPararAposSeg = JsonAux.Num(p, "autoPararAposSeg"),
             Cache = cache,
             Base = cache,
         };

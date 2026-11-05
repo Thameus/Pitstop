@@ -14,6 +14,8 @@ public sealed class Execucao
     /// <summary>Hora em que ficou pronto ("Server startup in", prontoLog, ou 3 s de vida).</summary>
     public long? Pronto { get; set; }
     public Regex? ProntoRe { get; init; }
+    public string FalhaLog { get; init; } = "";
+    public string? LinhaFalha { get; set; }
     public bool Parando { get; set; }
     public bool Cancelado { get; set; }
     /// <summary>App Java e Comando com saída 0 encerram normalmente, sem estado de queda.</summary>
@@ -23,6 +25,9 @@ public sealed class Execucao
     public int? LinhaAtual { get; set; }
     public string? ScriptTemporario { get; init; }
     public string? MotivoParada { get; set; }
+    public int? AutoPararAposSeg { get; init; }
+    /// <summary>Prazo absoluto da auto-parada; começa quando Pronto é marcado.</summary>
+    public long? AutoPararAte { get; set; }
     public int? PortaPronto { get; init; }
     public bool PortaOcupadaAntes { get; init; }
     public string? AbrirUrlAoPronto { get; init; }
@@ -39,6 +44,8 @@ public sealed class Ultimo
     public int? Codigo { get; init; }
     public bool? Cancelado { get; init; }
     public string? Erro { get; init; }
+    public bool Falha { get; init; }
+    public string? LinhaFalha { get; init; }
     public string? Motivo { get; init; }
     /// <summary>false = saiu sem parar() pedido (caiu). Comando sempre volta a Parado e usa Motivo/Codigo no histórico.</summary>
     public bool? Parado { get; init; }
@@ -52,6 +59,11 @@ public sealed class StatusExecucao
     public int Pid { get; init; }
     public long Desde { get; init; }
     public long? Pronto { get; init; }
+    public bool Falha { get; init; }
+    public string? LinhaFalha { get; init; }
+    public string? Motivo { get; init; }
+    public long? MemoriaBytes { get; set; }
+    public string EstadoMemoria { get; set; } = "semPid";
 }
 
 public sealed record StatusArtefato(string Repo, string Modulo, string Contexto, string? DocBase);
@@ -60,6 +72,7 @@ public sealed class StatusPerfil
 {
     public string Nome { get; init; } = "";
     public string Tipo { get; init; } = "tomcat";
+    public string Base { get; init; } = "";
     public int? Porta { get; init; }
     public int PortaDebug { get; init; }
     public string? Url { get; init; }
@@ -100,6 +113,8 @@ public sealed class Runner
     readonly Dictionary<string, LogArquivoComando> arquivosLogComando = new();
     /// <summary>Reinício em andamento (parar + subir): cobre o intervalo em que o perfil não tem processo nem reserva.</summary>
     readonly Dictionary<string, Reserva> reinicios = new();
+    readonly CancellationTokenSource autoParadaCancelamento = new();
+    Task? autoParadaMonitor;
     bool saindo;
 
     public bool Saindo { get { lock (trava) return saindo; } }
@@ -119,9 +134,67 @@ public sealed class Runner
         {
             if (estado.GetValueOrDefault(nome) != reg || reg.Pronto != null) return;
             reg.Pronto = Agora.Ms;
+            if (reg.AutoPararAposSeg is int segundos && segundos > 0)
+            {
+                reg.AutoPararAte = reg.Pronto.Value + segundos * 1000L;
+                GarantirMonitorAutoParada();
+            }
             abrir = reg.AbrirUrlAoPronto;
         }
         if (abrir != null) Proc.AbrirUrl(abrir);
+    }
+
+    /// <summary>Um único monitor para todos os prazos; nunca observa porta, log ou processo externo.</summary>
+    void GarantirMonitorAutoParada()
+    {
+        if (autoParadaMonitor is { IsCompleted: false }) return;
+        autoParadaMonitor = Task.Run(MonitorarAutoParadas);
+    }
+
+    async Task MonitorarAutoParadas()
+    {
+        try
+        {
+            while (!autoParadaCancelamento.IsCancellationRequested)
+            {
+                List<(string Nome, Execucao Exec)> vencidas = [];
+                long proximo = Agora.Ms + 500;
+                var existePrazoAtivo = false;
+                lock (trava)
+                {
+                    foreach (var (nome, exec) in estado)
+                    {
+                        if (exec.AutoPararAte is not long ate || exec.MotivoParada != null || exec.Parando) continue;
+                        if (exec.Child.HasExited) continue;
+                        existePrazoAtivo = true;
+                        if (ate <= Agora.Ms)
+                        {
+                            exec.MotivoParada = "auto-duracao";
+                            exec.Parando = true;
+                            vencidas.Add((nome, exec));
+                        }
+                        else proximo = Math.Min(proximo, ate);
+                    }
+                    if (!existePrazoAtivo)
+                    {
+                        autoParadaMonitor = null;
+                        return;
+                    }
+                }
+                foreach (var (nome, exec) in vencidas)
+                    _ = PararAutomaticamente(nome, exec);
+                var espera = Math.Clamp(proximo - Agora.Ms, 50, 500);
+                await Task.Delay((int)espera, autoParadaCancelamento.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (autoParadaCancelamento.IsCancellationRequested) { }
+    }
+
+    async Task PararAutomaticamente(string nome, Execucao exec)
+    {
+        Log(nome, "[pit] auto-parada após " + exec.AutoPararAposSeg + "s desde pronto; encerrando...");
+        try { await PararAgora(nome, exec).ConfigureAwait(false); }
+        catch (Exception ex) { Log(nome, "[pit] ERRO auto-parada: " + ex.Message); }
     }
 
     Execucao? Em(string nome)
@@ -190,6 +263,21 @@ public sealed class Runner
         catch (RegexMatchTimeoutException) { return false; }
     }
 
+    /// <summary>Falha de log é texto literal, sem regex; vazio desabilita a detecção.</summary>
+    public static bool LinhaCasaFalha(string falhaLog, string linha) =>
+        falhaLog != "" && linha.Contains(falhaLog, StringComparison.Ordinal);
+
+    /// <summary>Processa uma linha do pipeline: falha literal é registrada uma vez e impede prontidão na linha.</summary>
+    public static bool ProcessarLinhaSaida(Execucao reg, string linha)
+    {
+        if (reg.LinhaFalha == null && LinhaCasaFalha(reg.FalhaLog, linha))
+        {
+            reg.LinhaFalha = linha;
+            return false;
+        }
+        return reg.LinhaFalha == null && reg.Pronto == null && Casa(reg.ProntoRe, linha);
+    }
+
     /// <summary>Códigos de cor/cursor do terminal (dev server do npm mesmo com NO_COLOR): o log é texto puro.</summary>
     static readonly Regex Ansi = new(@"\x1B\[[0-9;?]*[ -/]*[@-~]");
 
@@ -202,6 +290,12 @@ public sealed class Runner
             if (filtro != null) { if (filtro(l)) Log(nome, l); return; }
 
             var reg = Em(nome);
+            var falhaAntes = reg?.LinhaFalha;
+            var prontoNestaLinha = reg != null && reg.Child == child && ProcessarLinhaSaida(reg, l);
+            if (falhaAntes == null && reg?.LinhaFalha != null && reg.Child == child)
+            {
+                Log(nome, "[pit] falhaLog correspondeu: " + l);
+            }
             if (reg != null && reg.Child == child && reg.MarcadorComando is { } marcador &&
                 l.StartsWith("@@PIT:" + marcador + ":", StringComparison.Ordinal) && l.EndsWith("@@", StringComparison.Ordinal))
             {
@@ -214,14 +308,14 @@ public sealed class Runner
                 }
             }
             // porta aberta não é deploy pronto: "Server startup in"/prontoLog marca o fim da subida.
-            if (reg != null && reg.Child == child && reg.Pronto == null && Casa(reg.ProntoRe, l))
+            if (prontoNestaLinha && reg is { } execReg)
             {
-                if (reg.ProntidaoHttp is { } endereco)
+                if (execReg.ProntidaoHttp is { } endereco)
                 {
-                    if (Interlocked.Exchange(ref reg.SondaIniciada, 1) == 0)
-                        _ = ObservarHttpPronto(nome, reg, endereco);
+                    if (Interlocked.Exchange(ref execReg.SondaIniciada, 1) == 0)
+                        _ = ObservarHttpPronto(nome, execReg, endereco);
                 }
-                else MarcarPronto(nome, reg);
+                else MarcarPronto(nome, execReg);
             }
             Log(nome, l);
         }
@@ -295,6 +389,8 @@ public sealed class Runner
                         Codigo = code,
                         Cancelado = motivo == "usuario" ? true : null,
                         Motivo = motivo,
+                        Falha = reg.LinhaFalha != null,
+                        LinhaFalha = reg.LinhaFalha,
                         Parado = comando ? true : normal,
                         Fim = Agora.Ms,
                         Duracao = Agora.Ms - reg.Inicio,
@@ -349,6 +445,8 @@ public sealed class Runner
                 ProntoRe = p.ProntoLog != ""
                     ? new Regex(Regex.Escape(p.ProntoLog), RegexOptions.None, TimeSpan.FromMilliseconds(200))
                     : null,
+                FalhaLog = p.FalhaLog,
+                AutoPararAposSeg = p.AutoPararAposSeg,
                 PortaPronto = p.ProntoLog == "" && p.Porta > 0 ? p.Porta : null,
                 PortaOcupadaAntes = portaOcupada,
                 AbrirUrlAoPronto = p.AbrirNavegadorPronto ? p.Url : null,
@@ -568,6 +666,8 @@ public sealed class Runner
         var reg = new Execucao
         {
             Child = child, Tipo = debug ? "debug" : "tomcat", Debug = debug, ProntoRe = new Regex("Server startup in"),
+            FalhaLog = p.FalhaLog,
+            AutoPararAposSeg = p.AutoPararAposSeg,
             ProntidaoHttp = prontidao,
         };
         _ = Acoplar(nome, reg);
@@ -680,10 +780,12 @@ public sealed class Runner
         return PararAgora(nome);
     }
 
-    async Task PararAgora(string nome)
+    async Task PararAgora(string nome, Execucao? esperado = null)
     {
         var p = Config.LerPerfil(Config.Ler(), nome);
         var e = Em(nome);
+        if (esperado != null && e != esperado) return;
+        if (esperado != null && esperado.Child.HasExited) return;
         Reserva? res;
         lock (trava) res = reservas.GetValueOrDefault(nome);
         // build/compilação: derruba a árvore do Maven e avisa o loop. Entre um processo e outro não há árvore para
@@ -837,6 +939,8 @@ public sealed class Runner
             {
                 Child = child, Tipo = debug ? "debug" : "java", Debug = debug, SaidaZeroNormal = true,
                 ProntoRe = p.ProntoLog != "" ? new Regex(p.ProntoLog, RegexOptions.None, TimeSpan.FromMilliseconds(200)) : null,
+                FalhaLog = p.FalhaLog,
+                AutoPararAposSeg = p.AutoPararAposSeg,
             });
         return child;
     }
@@ -933,6 +1037,8 @@ public sealed class Runner
             {
                 Child = child, Tipo = "npm",
                 ProntoRe = p.ProntoLog != "" ? new Regex(p.ProntoLog, RegexOptions.None, TimeSpan.FromMilliseconds(200)) : null,
+                FalhaLog = p.FalhaLog,
+                AutoPararAposSeg = p.AutoPararAposSeg,
             });
         return child;
     }
@@ -1259,6 +1365,14 @@ public sealed class Runner
         };
     }
 
+    static void MedirMemoria(StatusExecucao? exec)
+    {
+        if (exec == null) return;
+        var resultado = MemoriaProcessos.Medir(exec.Pid);
+        exec.MemoriaBytes = resultado.MemoriaBytes;
+        exec.EstadoMemoria = resultado.Estado;
+    }
+
     /// <summary>Estado de todos os perfis. Sondas de porta em paralelo (porta fechada demora até o timeout).</summary>
     public async Task<List<StatusPerfil>> Status()
     {
@@ -1272,7 +1386,8 @@ public sealed class Runner
             lock (trava)
             {
                 // entre um processo e outro de uma operação (build, compilação + subida) só a reserva está lá
-                exec = e != null ? new StatusExecucao { Tipo = e.Tipo, Pid = e.Child.Id, Desde = e.Inicio, Pronto = e.Pronto }
+                    exec = e != null ? new StatusExecucao { Tipo = e.Tipo, Pid = e.Child.Id, Desde = e.Inicio, Pronto = e.Pronto,
+                        Falha = e.LinhaFalha != null, LinhaFalha = e.LinhaFalha, Motivo = e.MotivoParada }
                     : reservas.GetValueOrDefault(nome) is { } rs ? new StatusExecucao { Tipo = rs.Tipo, Desde = rs.Inicio }
                     : reinicios.GetValueOrDefault(nome) is { } ri ? new StatusExecucao { Tipo = "reinicio", Desde = ri.Inicio }
                     : null;
@@ -1282,9 +1397,10 @@ public sealed class Runner
             {
                 var r = e == null && exec == null ? ExecucaoExterna(p,
                     p.Porta <= 0 || await Proc.PortaOcupada(p.Porta).ConfigureAwait(false)) : null;
+                MedirMemoria(exec ?? r);
                 return new StatusPerfil
                 {
-                    Nome = nome, Tipo = "comando", Porta = p.Porta > 0 ? p.Porta : null, Url = p.Url,
+                    Nome = nome, Tipo = "comando", Base = p.Base, Porta = p.Porta > 0 ? p.Porta : null, Url = p.Url,
                     Comando = ComandoApp.Linhas(p.Comando).FirstOrDefault().Texto, Pasta = p.Pasta,
                     EmUso = e != null || r != null,
                     Execucao = exec ?? r, Ultimo = u,
@@ -1294,9 +1410,10 @@ public sealed class Runner
             {
                 // sem porta: "em uso" = processo do runner rodando, ou o pid gravado (pit up / outra instância)
                 var r = e == null && exec == null ? ExecucaoExterna(p, true) : null;
+                MedirMemoria(exec ?? r);
                 return new StatusPerfil
                 {
-                    Nome = nome, Tipo = "java", PortaDebug = p.PortaDebug, MainClass = p.EhZip ? null : p.MainClass,
+                    Nome = nome, Tipo = "java", Base = p.Base, PortaDebug = p.PortaDebug, MainClass = p.EhZip ? null : p.MainClass,
                     Pacote = p.EhZip ? p.Pacote : null,
                     EmUso = (e != null && e.Tipo != "build") || r != null,
                     Execucao = exec ?? r, Ultimo = u,
@@ -1306,18 +1423,20 @@ public sealed class Runner
             {
                 var portaAberta = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
                 var r = e == null && exec == null ? ExecucaoExterna(p, portaAberta || p.Porta <= 0) : null;
+                MedirMemoria(exec ?? r);
                 return new StatusPerfil
                 {
-                    Nome = nome, Tipo = "npm", Porta = p.Porta, Url = p.Url, Script = p.Script,
+                    Nome = nome, Tipo = "npm", Base = p.Base, Porta = p.Porta, Url = p.Url, Script = p.Script,
                     EmUso = (e != null && e.Tipo != "build") || r != null || portaAberta,
                     Execucao = exec ?? r, Ultimo = u,
                 };
             }
             var portaTomcatAberta = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
             var tomcatExterno = e == null && exec == null ? ExecucaoExterna(p, portaTomcatAberta) : null;
+            MedirMemoria(exec ?? tomcatExterno);
             return new StatusPerfil
             {
-                Nome = nome, Tipo = "tomcat", Porta = p.Porta, PortaDebug = p.PortaDebug, Url = p.Url,
+                Nome = nome, Tipo = "tomcat", Base = p.Base, Porta = p.Porta, PortaDebug = p.PortaDebug, Url = p.Url,
                 Pacote = p.EhWar ? string.Join("; ", p.Artefatos.Select(a => a.War)) : null,
                 EmUso = (e != null && e.Tipo != "build") || tomcatExterno != null || portaTomcatAberta,
                 Execucao = exec ?? tomcatExterno, Ultimo = u,
@@ -1394,7 +1513,7 @@ public sealed class Runner
     /// log e último resultado. No ar (por esta tela ou pelo pit.pid) é recusado: o processo usa a pasta do nome
     /// velho. Pasta que não dá para mover (arquivo aberto) fica onde está; a próxima subida cria a nova.
     /// </summary>
-    public ResultadoAcao Renomear(string nome, string novo)
+    public ResultadoAcao Renomear(string nome, string novo, string? versao = null)
     {
         novo = novo.Trim();
         if (!Config.NomeValido(novo)) throw new ErroRunner("nome inválido: use até 64 letras/números e - . _, sem ponto no início/fim");
@@ -1405,7 +1524,7 @@ public sealed class Runner
         {
             if (PidArquivo.Ler(p) is { } r && PidArquivo.Vivo(r, ExePid(p)))
                 throw new ErroRunner("pare o " + nome + " antes de renomear (rodando fora desta tela, pid " + r.Pid + ")");
-            Config.Renomear(nome, novo);
+            Config.Renomear(nome, novo, versao ?? Config.Versao());
             var q = Config.LerPerfil(Config.Ler(), novo);
             foreach (var (de, para) in new[] { (p.Base, q.Base), (p.Cache, q.Cache) }.Distinct())
             {
@@ -1418,6 +1537,26 @@ public sealed class Runner
                 if (ultimos.Remove(nome, out var u)) ultimos[novo] = u;
             Log(nome, "[pit] perfil renomeado: " + nome + " -> " + novo);
             Logs.Renomear(nome, novo);
+            return new ResultadoAcao();
+        }
+        finally { Liberar(nome, res); }
+    }
+
+    /// <summary>
+    /// Remove o registro de um perfil, sem limpar nenhuma pasta. Recusa execução/reserva/reinício local e pit.pid
+    /// externo vivo; porta ocupada, isoladamente, não é ownership.
+    /// </summary>
+    public ResultadoAcao Remover(string nome, string? versao = null)
+    {
+        var p = Config.LerPerfil(Config.Ler(), nome);
+        var res = Reservar(nome, "remover", "pare o " + nome + " antes de removê-lo");
+        try
+        {
+            if (PidArquivo.Ler(p) is { } r && PidArquivo.Vivo(r, ExePid(p)))
+                throw new ErroRunner("pare o " + nome + " antes de removê-lo (rodando fora desta tela, pid " + r.Pid + ")");
+            Config.Remover(nome, versao ?? throw new ErroRunner("remover exige a versão atual de perfis.json; recarregue a configuração"));
+            lock (trava) ultimos.Remove(nome);
+            Logs.Limpar(nome);
             return new ResultadoAcao();
         }
         finally { Liberar(nome, res); }
@@ -1436,12 +1575,15 @@ public sealed class Runner
         }
     }
 
-    /// <summary>Stop gracioso de cada perfil em execução (Parar() já mata após STOP_TIMEOUT_SEG).</summary>
-    public Task PararTodos() => Task.WhenAll(EmExecucao().Select(async n =>
+    /// <summary>Stop gracioso de cada perfil indicado (Parar() já mata após STOP_TIMEOUT_SEG).</summary>
+    public Task PararTodos(IEnumerable<string> nomes) => Task.WhenAll(nomes.Distinct().Select(async n =>
     {
         try { await Parar(n).ConfigureAwait(false); }
         catch (Exception ex) { Log(n, "[pit] ERRO " + ex.Message); }
     }));
+
+    /// <summary>Stop gracioso dos perfis com execução nesta instância.</summary>
+    public Task PararTodos() => PararTodos(EmExecucao());
 
     /// <summary>Derruba na hora a árvore de tudo que o runner subiu (o Job Object cobre o que escapar).</summary>
     public void MatarTodos()

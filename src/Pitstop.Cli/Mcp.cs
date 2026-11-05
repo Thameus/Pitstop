@@ -38,8 +38,8 @@ public static class Mcp
         T("pitstop_profiles", "Lista os nomes e tipos de perfis configurados sem mostrar todos os detalhes.", Vazio),
         T("pitstop_profile", "Lê os detalhes do perfil indicado (pode conter caminhos e variáveis privadas).", Perfil),
         T("pitstop_save_profile", "Cria ou altera campos de um perfil, preservando demais campos. Pode configurar comandos executáveis; obtenha aprovação do usuário.", """{"type":"object","properties":{"perfil":{"type":"string"},"dados":{"type":"object"}},"required":["perfil","dados"]}"""),
-        T("pitstop_delete_profile", "Remove o perfil da configuração. Ação destrutiva; confirme antes.", Perfil),
-        T("pitstop_rename_profile", "Renomeia um perfil parado, preservando dados quando possível.", """{"type":"object","properties":{"perfil":{"type":"string"},"novo":{"type":"string"}},"required":["perfil","novo"]}"""),
+        T("pitstop_delete_profile", "Remove o perfil da configuração pela operação segura central; não apaga base, cache ou dados. Recusa execução/ownership externo; confirme antes.", Perfil),
+        T("pitstop_rename_profile", "Renomeia um perfil parado, preservando dados quando possível e recusando alterações externas concorrentes.", """{"type":"object","properties":{"perfil":{"type":"string"},"novo":{"type":"string"}},"required":["perfil","novo"]}"""),
         T("pitstop_action", "Ações de perfil pela API local: start, debug, stop, reiniciar, build, sync, preparar, abrir, terminal ou limpar. Confirme ações destrutivas.", """{"type":"object","properties":{"perfil":{"type":"string"},"acao":{"type":"string","enum":["start","debug","stop","reiniciar","build","sync","preparar","abrir","terminal","limpar"]}},"required":["perfil","acao"]}"""),
         T("pitstop_logs", "Lê as últimas linhas do log da instância Pitstop em execução, sem acompanhar indefinidamente.", """{"type":"object","properties":{"perfil":{"type":"string"},"linhas":{"type":"integer","minimum":1,"maximum":200}},"required":["perfil"]}"""),
         T("pitstop_projects", "Descobre repositórios Maven e módulos WAR (dir opcional).", Dir),
@@ -144,8 +144,7 @@ public static class Mcp
                 "pitstop_profile" => await PerfilDetalhes(http, Nome(args)),
                 "pitstop_save_profile" => await SalvarPerfil(http, Nome(args), args.GetProperty("dados")),
                 "pitstop_delete_profile" => await ExcluirPerfil(http, Nome(args)),
-                "pitstop_rename_profile" => await Pedir(http, HttpMethod.Post, "/api/p/" + Nome(args) + "/renomear",
-                    JsonSerializer.Serialize(new { para = Campo(args, "novo") })),
+                "pitstop_rename_profile" => await Renomear(http, Nome(args), Campo(args, "novo")),
                 "pitstop_action" => await Acao(http, args),
                 "pitstop_logs" => await Logs(http, Nome(args), args),
                 "pitstop_projects" => await Pedir(http, HttpMethod.Get, Url("/api/projetos", "dir", Campo(args, "dir"))),
@@ -202,6 +201,14 @@ public static class Mcp
         return perfil.ToJsonString();
     }
 
+    static async Task<string> Renomear(HttpClient http, string nome, string novo)
+    {
+        var cfg = await LerConfig(http);
+        var versao = JsonAux.Txt(cfg, "_versao") ?? throw new InvalidOperationException("a configuração não informou sua versão");
+        return await Pedir(http, HttpMethod.Post, "/api/p/" + nome + "/renomear",
+            JsonSerializer.Serialize(new { para = novo, versao }));
+    }
+
     static async Task<string> SalvarPerfil(HttpClient http, string nome, JsonElement dados)
     {
         if (dados.ValueKind != JsonValueKind.Object) throw new ArgumentException("dados precisam ser um objeto JSON");
@@ -221,13 +228,11 @@ public static class Mcp
     static async Task<string> ExcluirPerfil(HttpClient http, string nome)
     {
         var chave = Uri.UnescapeDataString(nome);
-        var status = JsonNode.Parse(await Pedir(http, HttpMethod.Get, "/api/status"))?.AsArray();
-        if (status?.Any(s => s?["nome"]?.ToString() == chave && s?["emUso"]?.GetValue<bool>() == true) == true)
-            throw new InvalidOperationException("pare o perfil antes de excluí-lo");
         var cfg = await LerConfig(http);
-        if (!cfg["perfis"]!.AsObject().Remove(chave))
-            throw new ArgumentException("perfil não encontrado");
-        return await Pedir(http, HttpMethod.Put, "/api/cfg", cfg.ToJsonString());
+        if (cfg["perfis"]?[chave] == null) throw new ArgumentException("perfil não encontrado");
+        var versao = JsonAux.Txt(cfg, "_versao") ?? throw new InvalidOperationException("a configuração não informou sua versão");
+        return await Pedir(http, HttpMethod.Post, "/api/p/" + nome + "/remover",
+            JsonSerializer.Serialize(new { versao }));
     }
 
     static async Task<string> Pedir(HttpClient http, HttpMethod metodo, string rota, string? json = null)

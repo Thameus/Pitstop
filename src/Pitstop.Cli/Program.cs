@@ -66,29 +66,64 @@ static class Cli
         }
         if (cmd == "status")
         {
-            foreach (var s in await runner.Status())
+            var status = await runner.Status();
+            if (Flag("--json"))
             {
+                Console.WriteLine(JsonAux.Serializar(status.Select(s => new
+                {
+                    nome = s.Nome,
+                    tipo = s.Tipo,
+                    porta = s.Porta,
+                    portaDebug = s.PortaDebug,
+                    emUso = s.EmUso,
+                    pid = s.Execucao?.Pid,
+                    memoriaBytes = s.Execucao?.MemoriaBytes,
+                    estadoMemoria = s.Execucao?.EstadoMemoria ?? "semPid",
+                    @base = s.Base,
+                    falha = s.Execucao?.Falha ?? s.Ultimo?.Falha,
+                    linhaFalha = s.Execucao?.LinhaFalha ?? s.Ultimo?.LinhaFalha,
+                    motivo = s.Execucao?.Motivo ?? s.Ultimo?.Motivo
+                })));
+                return 0;
+            }
+            foreach (var s in status)
+            {
+                var motivo = s.Execucao?.Motivo ?? s.Ultimo?.Motivo;
                 Console.WriteLine((s.EmUso ? "NO AR " : "parado") + "  " + s.Nome +
                     s.Tipo switch
                     {
                         "java" => "  [java] " + (s.MainClass ?? s.Pacote),
                         "npm" => "  [npm] " + s.Script + "  :" + s.Porta + "  " + s.Url,
                         "comando" => "  [comando] " + (s.Comando ?? "") + (s.Porta is int pc ? "  :" + pc : ""),
-                        _ => "  :" + s.Porta + "  " + s.Url,
-                    });
+                         _ => "  :" + s.Porta + "  " + s.Url,
+                      } + "  " + MemoriaTexto(s.Execucao) + (motivo != null ? "  motivo: " + motivo : ""));
                 foreach (var a in s.Artefatos)
                     Console.WriteLine("          " + a.Contexto + " -> " + (a.DocBase ?? "(sem pasta explodida)"));
             }
             return 0;
         }
         if (cmd is null or "-h" or "--help" or "/?") { Ajuda(); return cmd is null ? 1 : 0; }
+        // A flag precisa ser tratada antes de interpretar o segundo argumento como nome de perfil:
+        // `pit down --todos` percorre a configuração, não procura um perfil chamado --todos.
+        if ((cmd is "down" or "stop") && Flag("--todos"))
+        {
+            await runner.PararTodos(Config.NomesPerfis(Config.Ler()));
+            return 0;
+        }
+        if (cmd is "remover" or "remove")
+        {
+            if (nome == null) throw new ErroRunner("informe o perfil. Ex.: pit remover meu-tomcat");
+            await Task.Run(() => runner.Remover(nome, Config.Versao()));
+            return 0;
+        }
         if (nome == null) throw new ErroRunner("informe o perfil. Ex.: pit up meu-tomcat");
         var p = Config.LerPerfil(Config.Ler(), nome);
 
         if (cmd == "logs")
         {
-            if (!p.EhComando) throw new ErroRunner("logs persistidos se aplicam ao perfil Comando");
-            foreach (var l in LogArquivoComando.LerUltimo(p, Config.ReplayMax)) Console.WriteLine(l);
+            if (!p.EhComando && !p.EhTomcat) throw new ErroRunner("logs persistidos estão disponíveis para perfis Comando e Tomcat");
+            var linhas = p.EhComando ? LogArquivoComando.LerUltimo(p, Config.ReplayMax) : Tomcat.LerUltimoLog(p, Config.ReplayMax);
+            foreach (var l in linhas) Console.WriteLine(l);
             return 0;
         }
 
@@ -116,11 +151,20 @@ static class Cli
         }
     }
 
+    static string MemoriaTexto(StatusExecucao? exec) => exec?.MemoriaBytes is long bytes
+        ? "RAM: " + (bytes < 1024 * 1024 ? bytes + " B" : (bytes / 1024d / 1024d).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MB")
+        : "RAM: indisponível";
+
     static async Task<int> Up(Runner runner, Perfil p, bool debug, bool build, bool semCompilar)
     {
         // Ctrl+C chega também ao Tomcat/java (mesmo console): aqui só espera ele sair. Sem isso o pit.exe
         // morreria antes e (no Windows) o Job Object derrubaria o filho sem o shutdown dele.
-        using var sinal = PosixSignalRegistration.Create(PosixSignal.SIGINT, c => c.Cancel = true);
+        using var cancelamento = new CancellationTokenSource();
+        using var sinal = PosixSignalRegistration.Create(PosixSignal.SIGINT, c =>
+        {
+            c.Cancel = true;
+            cancelamento.Cancel();
+        });
         System.Diagnostics.Process child;
         string? scriptComando = null;
         if (p.EhComando)
@@ -157,12 +201,31 @@ static class Cli
         }
         else
         {
+            var prontidao = Tomcat.ValidarProntoUrl(p);
             if (build) await runner.Build(p.Nome, console: true);
             await Runner.ChecarLivre(p, debug);   // mesma checagem da tela: HTTP, shutdown, debug, JMX, AJP
             if (p.EhWar) runner.PrepararWar(p.Nome, p, false, null);   // war ainda não extraído
             foreach (var x in Tomcat.PrepararBase(p)) Console.WriteLine("[pit] " + x.Contexto + " -> " + x.DocBase);
             child = Tomcat.Catalina(p, debug ? "jpda run" : "run", debug, redirecionar: false);
             PidArquivo.Gravar(p, child);
+            var pronto = prontidao == null ? null : Tomcat.AguardarPronto(child, prontidao, cancelamento.Token);
+            if (pronto != null)
+            {
+                var saida = child.WaitForExitAsync();
+                if (await Task.WhenAny(pronto, saida) == pronto)
+                {
+                    if (await pronto is long ms)
+                        Console.WriteLine("[pit] pronto em " + Agora.Duracao(ms) + " (" + prontidao + ")");
+                    await saida;
+                }
+                else
+                {
+                    cancelamento.Cancel();
+                    await pronto;
+                }
+            }
+            else await child.WaitForExitAsync();
+            return child.ExitCode;
         }
         try
         {
@@ -219,9 +282,11 @@ static class Cli
           up <perfil> [--debug] [--build]    sobe no terminal atual (Ctrl+C para parar)
           up <app> [--sem-compilar]          app Java: não compila antes
           down|stop <perfil>                 para o perfil
+          down|stop --todos                  para todos os perfis com ownership confirmado
+          remover|remove <perfil>             remove só a configuração (não apaga base/cache/dados)
           start|up <perfil>                  inicia no terminal atual
           restart <perfil>                   para e inicia novamente no terminal
-          logs <perfil>                      último log persistido de um perfil Comando
+          logs <perfil>                      último log persistido de Comando ou Tomcat
           build <perfil>                     build dos artefatos ativos
           sync <perfil>                      copia estáticos/classes para a pasta explodida
           status                             perfis, NO AR/parado, docBase resolvido

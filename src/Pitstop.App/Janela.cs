@@ -426,11 +426,16 @@ sealed partial class Janela : Window
 
     static string Dur(long ms) => Agora.Duracao(ms);
 
+    static string MemoriaTexto(StatusExecucao? exec) => exec?.MemoriaBytes is long bytes
+        ? "RAM: " + (bytes < 1024 * 1024 ? bytes + " B" : (bytes / 1024d / 1024d).ToString("0.0") + " MB")
+        : "RAM: indisponível";
+
     static Estado EstadoDe(StatusPerfil? st)
     {
         if (st == null) return new("parado", "parado", "Parado");
         if (st.Execucao is { } e)
         {
+            if (e.Falha) return new("erro", "falha", "Falha · " + e.LinhaFalha, Rodando: true);
             if (e.Tipo == "externo") return e.Pronto == null
                 ? new("ocupado", "subindo", "Iniciando externamente…", Rodando: true)
                 : new("externo", "no ar", "No ar · iniciado pelo terminal ou outra instância", Rodando: true);
@@ -448,8 +453,10 @@ sealed partial class Janela : Window
             return new("portaocupada", "porta ocupada", "Porta " + st.Porta + " ocupada por outro processo", Rodando: true);
         }
         var u = st.Ultimo;
+        if (u?.Falha == true) return new("erro", "falha", "Falha · " + u.LinhaFalha);
         if (u != null && u.Tipo != "build" && u.Parado == false) return new("erro", "caiu", "Caiu · código " + u.Codigo);
-        return new("parado", "parado", u is { Tipo: "build", Ok: false } && u.Cancelado != true ? "Parado · último build falhou" : "Parado");
+        var motivo = u?.Motivo == "auto-duracao" ? " · auto-parado após duração" : "";
+        return new("parado", "parado", u is { Tipo: "build", Ok: false } && u.Cancelado != true ? "Parado · último build falhou" : "Parado" + motivo);
     }
 
     async void AtualizarStatus()

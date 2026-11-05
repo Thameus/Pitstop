@@ -18,6 +18,7 @@ public sealed class Servidor(Runner runner, int porta)
 {
     static readonly Regex RotaPerfil = new(@"^/api/p/([\w.-]+)/(log|start|debug|stop|reiniciar|build|sync|preparar|abrir|terminal|limpar)$");
     static readonly Regex RotaRenomear = new(@"^/api/p/([\w.-]+)/renomear$");
+    static readonly Regex RotaRemover = new(@"^/api/p/([\w.-]+)/remover$");
     static readonly Dictionary<string, (string Arquivo, string Tipo)> Icones = new()
     {
         ["/favicon.ico"] = ("icone.ico", "image/x-icon"),
@@ -204,7 +205,16 @@ public sealed class Servidor(Runner runner, int porta)
                 using var sr = new StreamReader(req.Body, Encoding.UTF8);
                 var corpo = JsonNode.Parse(await sr.ReadToEndAsync());
                 var para = JsonAux.Txt(corpo, "para") ?? throw new ErroRunner("informe o nome novo");
-                await Responder(res, 200, runner.Renomear(mr.Groups[1].Value, para));
+                var versao = JsonAux.Txt(corpo, "versao") ?? throw new ErroRunner("informe a versão atual de perfis.json");
+                await Responder(res, 200, runner.Renomear(mr.Groups[1].Value, para, versao));
+                return;
+            }
+            if (HttpMethods.IsPost(req.Method) && RotaRemover.Match(url) is { Success: true } md)
+            {
+                using var sr = new StreamReader(req.Body, Encoding.UTF8);
+                var corpo = JsonNode.Parse(await sr.ReadToEndAsync());
+                var versao = JsonAux.Txt(corpo, "versao") ?? throw new ErroRunner("informe a versão atual de perfis.json");
+                await Responder(res, 200, runner.Remover(md.Groups[1].Value, versao));
                 return;
             }
             if (m.Success && HttpMethods.IsPost(req.Method))
