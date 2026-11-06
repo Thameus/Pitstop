@@ -14,6 +14,9 @@ param(
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Destino = [IO.Path]::GetFullPath($Destino)
+$nomeFinal = [IO.Path]::GetFileName($Destino.TrimEnd('\', '/'))
+if ($nomeFinal -ne 'Pitstop') { $Destino = Join-Path $Destino 'Pitstop' }
+$Destino = [IO.Path]::GetFullPath($Destino)
 $Tools = Join-Path $Destino 'tools'
 $Tmp = Join-Path ([IO.Path]::GetTempPath()) ('pitstop-tools-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $Tools, $Tmp | Out-Null

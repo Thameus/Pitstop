@@ -39,6 +39,9 @@ if (-not $Silencioso) {
     if (-not [string]::IsNullOrWhiteSpace($r)) { $Destino = $r.Trim('"') }
 }
 $Destino = [IO.Path]::GetFullPath($Destino)
+$nomeFinal = [IO.Path]::GetFileName($Destino.TrimEnd('\', '/'))
+if ($nomeFinal -ne 'Pitstop') { $Destino = Join-Path $Destino 'Pitstop' }
+$Destino = [IO.Path]::GetFullPath($Destino)
 
 # Pitstop aberto a partir do destino: o Windows trava o .exe em uso
 $aberto = Get-Process -Name 'Pitstop' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($Destino, [StringComparison]::OrdinalIgnoreCase) }
