@@ -29,7 +29,7 @@ sealed class CartaoWar
 
 sealed partial class Janela
 {
-    static readonly HashSet<string> Numericos = ["porta", "portaDebug", "portaShutdown", "portaJmx", "portaAjp", "timeoutExecucaoSeg"];
+    static readonly HashSet<string> Numericos = ["porta", "portaDebug", "portaShutdown", "portaJmx", "portaAjp", "timeoutExecucaoSeg", "autoPararAposSeg"];
 
     readonly Dictionary<string, TextBox> fServ = new(), fApp = new(), fNpm = new(), fZip = new(), fComando = new();
     TextBox projetosDir = null!, novoProjetoDir = null!;
@@ -181,6 +181,7 @@ sealed partial class Janela
                 }),
             Ui.Bloco("Aplicação", null, null,
                 Ui.Campo("URL do perfil", F(fServ, "url")),
+                Ui.Campo("Auto-parar após ficar pronto (segundos)", F(fServ, "autoPararAposSeg", "vazio = desativado")),
                 Ui.Campo("Argumentos da JVM (CATALINA_OPTS, salvos neste perfil)", F(fServ, "vmArgs", "ex.: -Xmx1g -Dvalidar-xxxxx=true")),
                 new Expander
                 {
@@ -217,6 +218,8 @@ sealed partial class Janela
                     Ui.Campo("Debug (JDWP)", F(fApp, "portaDebug", "5006")),
                     Ui.Campo("PATH adicional (bibliotecas nativas; relativo ao módulo; separar por ;)", F(fApp, "pathExtra"))),
                 Ui.Campo("Pronto quando o log corresponder (regex; vazio = 3 s depois de iniciar)", F(fApp, "prontoLog")),
+                Ui.Campo("Falha quando o log contiver (texto literal)", F(fApp, "falhaLog")),
+                Ui.Campo("Auto-parar após ficar pronto (segundos)", F(fApp, "autoPararAposSeg", "vazio = desativado")),
                 compilarAntes));
     }
 
@@ -242,7 +245,9 @@ sealed partial class Janela
                 Ui.Grade(2,
                     Ui.Campo("Debug (JDWP)", F(fZip, "portaDebug", "5006")),
                     Ui.Campo("PATH adicional (relativo à pasta de trabalho; separar por ;)", F(fZip, "pathExtra"))),
-                Ui.Campo("Pronto quando o log corresponder (regex; vazio = 3 s depois de iniciar)", F(fZip, "prontoLog"))));
+                Ui.Campo("Pronto quando o log corresponder (regex; vazio = 3 s depois de iniciar)", F(fZip, "prontoLog")),
+                Ui.Campo("Falha quando o log contiver (texto literal)", F(fZip, "falhaLog")),
+                Ui.Campo("Auto-parar após ficar pronto (segundos)", F(fZip, "autoPararAposSeg", "vazio = desativado"))));
     }
 
     Control PainelNpm()
@@ -271,7 +276,9 @@ sealed partial class Janela
                 Ui.Grade(2,
                     Ui.Campo("Porta HTTP (a que o script abre)", F(fNpm, "porta", "4200")),
                     Ui.Campo("URL do perfil", F(fNpm, "url"))),
-                Ui.Campo("Pronto quando o log corresponder (regex)", F(fNpm, "prontoLog", "vazio = Compiled successfully (Angular/webpack), ready in (Vite)"))),
+                 Ui.Campo("Pronto quando o log corresponder (regex)", F(fNpm, "prontoLog", "vazio = Compiled successfully (Angular/webpack), ready in (Vite)")),
+                 Ui.Campo("Falha quando o log contiver (texto literal)", F(fNpm, "falhaLog")),
+                 Ui.Campo("Auto-parar após ficar pronto (segundos)", F(fNpm, "autoPararAposSeg", "vazio = desativado"))),
             Ui.Bloco("Node e build", null, null,
                 Ui.Grade(2,
                     Ui.Campo("Pasta do Node (vazio = node do PATH)", Pasta(F(fNpm, "nodeHome", "vazio = Node do PATH"), "Pasta do Node.js")),
@@ -305,8 +312,10 @@ sealed partial class Janela
                     Ui.Campo("Arquivo .env", Ui.ComBotoes(F(fComando, "envArquivo"), Ui.Procurar(fComando["envArquivo"], "Arquivo .env", false))),
                     Ui.Campo("Porta opcional", F(fComando, "porta", "vazio = não observar porta")),
                     Ui.Campo("URL do perfil (opcional)", F(fComando, "url", "https:// ou http://")),
-                    Ui.Campo("Pronto quando o log contiver", F(fComando, "prontoLog", "vazio = pronto ao iniciar ou pela porta")),
-                    Ui.Campo("Tempo limite (segundos)", F(fComando, "timeoutExecucaoSeg", "vazio = sem limite"))),
+                     Ui.Campo("Pronto quando o log contiver", F(fComando, "prontoLog", "vazio = pronto ao iniciar ou pela porta")),
+                     Ui.Campo("Falha quando o log contiver (texto literal)", F(fComando, "falhaLog")),
+                     Ui.Campo("Tempo limite (segundos)", F(fComando, "timeoutExecucaoSeg", "vazio = sem limite")),
+                     Ui.Campo("Auto-parar após ficar pronto (segundos)", F(fComando, "autoPararAposSeg", "vazio = desativado"))),
                 Ui.Campo("Variáveis de ambiente extras", env),
                 comandoAbrirPronto,
                 comandoAutoIniciar));
@@ -486,6 +495,8 @@ sealed partial class Janela
 
     static void Validar(JsonObject p)
     {
+        if (JsonAux.Num(p, "autoPararAposSeg") is int autoParar && autoParar <= 0)
+            throw new ErroRunner("auto-parada precisa ser maior que zero");
         switch (TipoDe(p))
         {
             case "java":

@@ -402,10 +402,12 @@ body.semPerfis .corpo{display:none}
       </div>
       <div class="bloco">
         <h2>Aplicação</h2>
-        <label class="campo">URL do perfil<input class="inp" id="url"></label>
+           <label class="campo">URL do perfil<input class="inp" id="url"></label>
+           <label class="campo">Auto-parar após ficar pronto (segundos)<input class="inp num" id="autoPararAposSeg" type="number" min="1" placeholder="vazio = desativado"></label>
         <label class="campo">Argumentos da JVM (CATALINA_OPTS, salvos neste perfil)<input class="inp" id="vmArgs" placeholder="-Xmx1g -Dvalidar-xxxxx=true"></label>
         <details><summary>Verificação de prontidão</summary>
           <label class="campo" style="margin-top:12px">URL de prontidão (opcional; HTTP localhost na mesma porta)<input class="inp" id="prontoUrl" placeholder="http://localhost:8080/app/health"></label>
+          <label class="campo">Falha quando o log contiver (texto literal)<input class="inp" id="falhaLog"></label>
         </details>
       </div>
     </section>
@@ -432,6 +434,8 @@ body.semPerfis .corpo{display:none}
           <label class="campo">Pastas extras no PATH (relativas ao módulo; separar por ;)<input class="inp" id="j_pathExtra"></label>
         </div>
         <label class="campo">Pronto quando o log tiver (regex; vazio = 3 s depois de subir)<input class="inp" id="j_prontoLog"></label>
+         <label class="campo">Falha quando o log contiver (texto literal)<input class="inp" id="j_falhaLog"></label>
+         <label class="campo">Auto-parar após ficar pronto (segundos)<input class="inp num" id="j_autoPararAposSeg" type="number" min="1" placeholder="vazio = desativado"></label>
         <label class="chk"><input type="checkbox" id="j_compilarAntes">Compilar antes de subir (só os módulos com fonte mais novo que as classes)</label>
       </div>
     </section>
@@ -459,6 +463,8 @@ body.semPerfis .corpo{display:none}
           <label class="campo">Pastas extras no PATH (relativas à pasta de trabalho; separar por ;)<input class="inp" id="z_pathExtra"></label>
         </div>
         <label class="campo">Pronto quando o log tiver (regex; vazio = 3 s depois de subir)<input class="inp" id="z_prontoLog"></label>
+         <label class="campo">Falha quando o log contiver (texto literal)<input class="inp" id="z_falhaLog"></label>
+         <label class="campo">Auto-parar após ficar pronto (segundos)<input class="inp num" id="z_autoPararAposSeg" type="number" min="1" placeholder="vazio = desativado"></label>
       </div>
     </section>
 
@@ -480,6 +486,8 @@ body.semPerfis .corpo{display:none}
           <label class="campo">URL do perfil<input class="inp" id="n_url"></label>
         </div>
         <label class="campo">Pronto quando o log tiver (regex)<input class="inp" id="n_prontoLog" placeholder="vazio = Compiled successfully (Angular/webpack), ready in (Vite)"></label>
+         <label class="campo">Falha quando o log contiver (texto literal)<input class="inp" id="n_falhaLog"></label>
+         <label class="campo">Auto-parar após ficar pronto (segundos)<input class="inp num" id="n_autoPararAposSeg" type="number" min="1" placeholder="vazio = desativado"></label>
       </div>
       <div class="bloco">
         <h2>Node e build</h2>
@@ -506,7 +514,9 @@ body.semPerfis .corpo{display:none}
           <label class="campo">Porta opcional<input class="inp num" id="c_porta" type="number" min="1" max="65535" placeholder="vazio = não observar porta"></label>
           <label class="campo">URL do perfil (opcional)<input class="inp" id="c_url" placeholder="http:// ou https://"></label>
           <label class="campo">Pronto quando o log contiver<input class="inp" id="c_prontoLog" placeholder="vazio = pronto ao iniciar ou pela porta"></label>
-          <label class="campo">Tempo limite (segundos)<input class="inp num" id="c_timeoutExecucaoSeg" type="number" min="1" placeholder="vazio = sem limite"></label>
+          <label class="campo">Falha quando o log contiver (texto literal)<input class="inp" id="c_falhaLog"></label>
+           <label class="campo">Tempo limite (segundos)<input class="inp num" id="c_timeoutExecucaoSeg" type="number" min="1" placeholder="vazio = sem limite"></label>
+           <label class="campo">Auto-parar após ficar pronto (segundos)<input class="inp num" id="c_autoPararAposSeg" type="number" min="1" placeholder="vazio = desativado"></label>
         </div>
         <label class="campo">Variáveis de ambiente extras<textarea class="inp" id="c_env" rows="4" placeholder="CHAVE=valor; uma por linha ou separadas por ;"></textarea></label>
         <label class="chk"><input type="checkbox" id="c_abrirNavegadorPronto">Abrir a URL quando o processo ficar pronto</label>
@@ -732,11 +742,11 @@ async function descobrir() {
   $('#projInfo').textContent = '· ' + descobertos.filter(p => p.artefatos.length).length + ' com war';
 }
 
-const campos = ['tomcatHome', 'javaHome', 'mavenHome', 'porta', 'portaDebug', 'portaJmx', 'portaShutdown', 'portaAjp', 'url', 'prontoUrl', 'vmArgs', 'confOrigem', 'projetosDir'];
-const camposJava = ['mainClass', 'modulo', 'trabalho', 'javaHome', 'javaHomeBuild', 'mavenHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog'];
-const camposNpm = ['pasta', 'script', 'args', 'porta', 'url', 'prontoLog', 'nodeHome', 'build', 'env'];
-const camposZip = ['pacote', 'jar', 'trabalho', 'conf', 'confDestino', 'javaHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog'];
-const camposComando = ['comando', 'pasta', 'shell', 'shellPersonalizado', 'envArquivo', 'porta', 'url', 'prontoLog', 'timeoutExecucaoSeg', 'env'];
+const campos = ['tomcatHome', 'javaHome', 'mavenHome', 'porta', 'portaDebug', 'portaJmx', 'portaShutdown', 'portaAjp', 'url', 'prontoUrl', 'falhaLog', 'vmArgs', 'confOrigem', 'projetosDir', 'autoPararAposSeg'];
+const camposJava = ['mainClass', 'modulo', 'trabalho', 'javaHome', 'javaHomeBuild', 'mavenHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog', 'falhaLog', 'autoPararAposSeg'];
+const camposNpm = ['pasta', 'script', 'args', 'porta', 'url', 'prontoLog', 'falhaLog', 'nodeHome', 'build', 'env', 'autoPararAposSeg'];
+const camposZip = ['pacote', 'jar', 'trabalho', 'conf', 'confDestino', 'javaHome', 'vmArgs', 'args', 'portaDebug', 'pathExtra', 'prontoLog', 'falhaLog', 'autoPararAposSeg'];
+const camposComando = ['comando', 'pasta', 'shell', 'shellPersonalizado', 'envArquivo', 'porta', 'url', 'prontoLog', 'falhaLog', 'timeoutExecucaoSeg', 'autoPararAposSeg', 'env'];
 // perfil "war": Servidor igual ao Tomcat, sem a pasta de projetos (os wars vêm prontos)
 const camposWar = campos.filter(c => c !== 'projetosDir');
 const TIPOS = { tomcat: 'Tomcat', java: 'app Java', npm: 'npm', war: 'Tomcat · WAR pronto', zip: 'pacote Java', comando: 'Comando' };
@@ -832,6 +842,7 @@ function estadoDe(st) {
   if (!st) return { k: 'parado', txt: 'parado', pill: 'Parado' };
   const e = st.execucao;
   if (e) {
+    if (e.falha) return { k: 'erro', txt: 'falha', pill: 'Falha · ' + e.linhaFalha, rodando: true };
     if (e.tipo === 'externo') return e.pronto === null || e.pronto === undefined
       ? { k: 'ocupado', txt: 'subindo', pill: 'Iniciando externamente…', rodando: true, fora: true }
       : { k: 'externo', txt: 'no ar', pill: 'No ar · iniciado pelo terminal ou outra instância', rodando: true, fora: true };
@@ -848,8 +859,10 @@ function estadoDe(st) {
     return { k: 'portaocupada', txt: 'porta ocupada', pill: 'Porta ' + st.porta + ' ocupada por outro processo', rodando: true, fora: true };
   }
   const u = st.ultimo;
+  if (u && u.falha) return { k: 'erro', txt: 'falha', pill: 'Falha · ' + u.linhaFalha };
   if (u && u.tipo !== 'build' && u.parado === false) return { k: 'erro', txt: 'caiu', pill: 'Caiu · código ' + u.codigo };
-  return { k: 'parado', txt: 'parado', pill: u && u.tipo === 'build' && !u.ok && !u.cancelado ? 'Parado · último build falhou' : 'Parado' };
+  const motivo = u && u.motivo === 'auto-duracao' ? 'auto-parado após duração' : '';
+  return { k: 'parado', txt: 'parado', pill: u && u.tipo === 'build' && !u.ok && !u.cancelado ? 'Parado · último build falhou' : 'Parado' + (motivo ? ' · ' + motivo : '') };
 }
 function pintarPerfis() {
   const nav = $('#perfis');
@@ -866,7 +879,7 @@ function pintarPerfis() {
       : t === 'zip' ? 'pacote · ' + (versaoDe(p.pacote) || 'Java')
       : t === 'comando' ? 'comando' + (p.porta ? ' · :' + p.porta : '')
       : (t === 'war' ? 'war' : 'Tomcat') + ' · :' + (p.porta || 8080);
-    b.innerHTML = `<i class="dot k-${est.k}"></i><span class="txt"><span class="nm">${esc(n)}</span><span class="mt">${esc(meta)}</span></span><span class="est">${esc(est.txt)}</span>`;
+     b.innerHTML = `<i class="dot k-${est.k}"></i><span class="txt"><span class="nm">${esc(n)}</span><span class="mt">${esc(meta)}</span></span><span class="est">${esc(est.txt)} · ${esc(memoriaTexto(statusTodos.find(s => s.nome === n)))}</span>`;
     b.onclick = () => selecionar(n);
     nav.appendChild(b);
   });
@@ -887,7 +900,7 @@ function pintarCabecalho() {
   const est = estadoDe(st);
   const tipo = tipoDe(p), java = tipo === 'java';
   $('#pillDot').className = 'dot k-' + est.k;
-  $('#pillTxt').textContent = est.pill;
+  $('#pillTxt').textContent = est.pill + ' · ' + memoriaTexto(st);
   $('#alvo').textContent = java ? (p.mainClass || 'sem classe main')
     : tipo === 'zip' ? (p.pacote ? base(p.pacote) + (versaoDe(p.pacote) ? ' · ' + versaoDe(p.pacote) : '') : 'sem pacote')
     : tipo === 'npm' ? 'npm run ' + (p.script || 'start') + (p.pasta ? ' · ' + base(p.pasta) : '')
@@ -1100,6 +1113,7 @@ function coletar() {
   return p;
 }
 function validar(p) {
+  if (p.autoPararAposSeg != null && p.autoPararAposSeg <= 0) throw new Error('auto-parada precisa ser maior que zero');
   if (p.tipo === 'java') {
     if (!p.mainClass) throw new Error('informe a classe main');
     if (!p.modulo) throw new Error('informe o módulo Maven da aplicação');
@@ -1653,7 +1667,7 @@ async function renomear() {
     titulo: 'Renomear perfil', icone: icoTipo(tipoDe(cfg.perfis[velho])),
     texto: 'A pasta do perfil (base do Tomcat ou cache) e o log vão junto.',
     rotulo: 'Nome do perfil', valor: velho, botao: 'Renomear', validar: validarNome,
-    acao: n => api('POST', '/api/p/' + encodeURIComponent(velho) + '/renomear', { para: n }),
+     acao: n => api('POST', '/api/p/' + encodeURIComponent(velho) + '/renomear', { para: n, versao: cfg._versao }),
   });
   if (!n) return;
   lsSet('pit.perfil', n);
@@ -1668,11 +1682,7 @@ $('#del').onclick = async () => {
   const ok = await dialogo({
     titulo: 'Excluir ' + alvo + '?', icone: ICO_LIXO, perigo: true, botao: 'Excluir perfil',
     texto: 'Sai do perfis.json (a versão anterior fica em perfis.json.bak). A pasta da base não é apagada.',
-    acao: async () => {
-      const salvo = cfg.perfis[alvo];
-      delete cfg.perfis[alvo];
-      try { await api('PUT', '/api/cfg', cfg); } catch (e) { cfg.perfis[alvo] = salvo; throw e; }
-    },
+     acao: () => api('POST', '/api/p/' + encodeURIComponent(alvo) + '/remover', { versao: cfg._versao }),
   });
   if (ok) carregar();
 };

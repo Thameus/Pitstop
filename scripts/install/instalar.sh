@@ -8,7 +8,7 @@ set -eu
 
 ORIGEM=${PITSTOP_SOURCE_ROOT:-$(cd "$(dirname "$0")" && pwd)}
 DADOS="${XDG_DATA_HOME:-$HOME/.local/share}"
-DESTINO="$DADOS/pitstop"
+DESTINO="$DADOS/Pitstop"
 SIM=0
 NAO_ABRIR=0
 for a in "$@"; do
@@ -39,6 +39,12 @@ if [ "$SIM" = 0 ]; then
   read -r r || r=""
   [ -n "$r" ] && DESTINO="$r"
 fi
+
+case "$(basename "${DESTINO%/}")" in
+  Pitstop) ;;
+  *) DESTINO="$DESTINO/Pitstop" ;;
+esac
+DESTINO=$(cd "$(dirname "$DESTINO")" 2>/dev/null && printf '%s/%s' "$PWD" "$(basename "$DESTINO")" || printf '%s' "$DESTINO")
 
 if pgrep -f "$DESTINO/app/Pitstop" >/dev/null 2>&1; then
   echo "  O Pitstop está aberto. Feche pelo ícone da bandeja ou menu ⋯ da janela (Parar e Sair) e rode de novo."

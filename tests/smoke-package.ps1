@@ -186,7 +186,7 @@ try {
         $rootDest = $substDrive + '\'
         powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $pkg 'instalar.ps1') -Destino $rootDest -Silencioso -NaoAbrir -SemPath -SemMenu -SemRegistro
         if ($LASTEXITCODE -ne 0) { throw "instalar.ps1 root destination failed with exit code $LASTEXITCODE" }
-        if (-not (Test-Path (Join-Path $rootDest 'app\Pitstop.exe'))) { throw 'root destination smoke did not install Pitstop.exe' }
+        if (-not (Test-Path (Join-Path $rootDest 'Pitstop\app\Pitstop.exe'))) { throw 'root destination smoke did not install Pitstop\app\Pitstop.exe' }
     }
     finally {
         & subst.exe $substDrive /D 2>$null

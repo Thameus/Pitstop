@@ -29,13 +29,11 @@ static class InstallerEngine
     public static string NormalizeDestination(string raw)
     {
         var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw.Trim().Trim('"')));
-        var root = Path.GetPathRoot(full);
-        if (!string.IsNullOrEmpty(root) &&
-            string.Equals(full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                          root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                          StringComparison.OrdinalIgnoreCase))
-            return Path.Combine(root, "Pitstop");
-        return full;
+        var semSeparadorFinal = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var nomeFinal = Path.GetFileName(semSeparadorFinal);
+        if (string.Equals(nomeFinal, "Pitstop", StringComparison.OrdinalIgnoreCase))
+            return full;
+        return Path.Combine(full, "Pitstop");
     }
 
     public static int SmokeRootPath()
@@ -49,9 +47,14 @@ static class InstallerEngine
             if (!string.Equals(Path.GetFullPath(actual), Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase))
                 return 9;
 
-            var normal = Path.Combine(root, "Apps", "Pitstop");
-            if (!string.Equals(NormalizeDestination(normal), Path.GetFullPath(normal), StringComparison.OrdinalIgnoreCase))
+            var existing = Path.Combine(root, "Apps", "Pitstop");
+            if (!string.Equals(NormalizeDestination(existing), Path.GetFullPath(existing), StringComparison.OrdinalIgnoreCase))
                 return 10;
+
+            var parent = Path.Combine(root, "Apps");
+            var expectedParent = Path.Combine(parent, "Pitstop");
+            if (!string.Equals(NormalizeDestination(parent), Path.GetFullPath(expectedParent), StringComparison.OrdinalIgnoreCase))
+                return 12;
 
             return 0;
         }
@@ -104,11 +107,12 @@ static class InstallerEngine
             };
             InstallAsync(o, _ => { }).GetAwaiter().GetResult();
 
-            if (!File.Exists(Path.Combine(destino, "app", "Pitstop.exe")) ||
-                !File.Exists(Path.Combine(destino, "app", "pit.exe")) ||
-                !File.Exists(Path.Combine(destino, "third-party", "dotnet", "LICENSE-INFORMATION-WINDOWS.md")) ||
-                !File.Exists(Path.Combine(destino, "third-party", "dotnet", "DOTNET-LIBRARY-LICENSE.html")) ||
-                !File.Exists(Path.Combine(destino, "desinstalar.ps1")))
+            var final = NormalizeDestination(destino);
+            if (!File.Exists(Path.Combine(final, "app", "Pitstop.exe")) ||
+                !File.Exists(Path.Combine(final, "app", "pit.exe")) ||
+                !File.Exists(Path.Combine(final, "third-party", "dotnet", "LICENSE-INFORMATION-WINDOWS.md")) ||
+                !File.Exists(Path.Combine(final, "third-party", "dotnet", "DOTNET-LIBRARY-LICENSE.html")) ||
+                !File.Exists(Path.Combine(final, "desinstalar.ps1")))
                 return 5;
 
             return 0;
@@ -126,22 +130,23 @@ static class InstallerEngine
         var cwdAnterior = Environment.CurrentDirectory;
         try
         {
-            Directory.CreateDirectory(Path.Combine(destino, "app"));
-            Directory.CreateDirectory(Path.Combine(destino, "config"));
-            File.WriteAllText(Path.Combine(destino, "app", "versao-antiga.txt"), "antiga");
-            File.WriteAllText(Path.Combine(destino, ".env"), "JDK_HOME=C:\\jdk-teste");
-            File.WriteAllText(Path.Combine(destino, "config", "perfis.json"), "{\"perfis\":{\"teste\":{\"tipo\":\"comando\",\"comando\":\"echo ok\"}}}");
+            var final = NormalizeDestination(destino);
+            Directory.CreateDirectory(Path.Combine(final, "app"));
+            Directory.CreateDirectory(Path.Combine(final, "config"));
+            File.WriteAllText(Path.Combine(final, "app", "versao-antiga.txt"), "antiga");
+            File.WriteAllText(Path.Combine(final, ".env"), "JDK_HOME=C:\\jdk-teste");
+            File.WriteAllText(Path.Combine(final, "config", "perfis.json"), "{\"perfis\":{\"teste\":{\"tipo\":\"comando\",\"comando\":\"echo ok\"}}}");
 
             // Regressão do updater V1: o Setup herdava <raiz>\app como diretório atual
             // e o próprio Windows impedia Directory.Move(app, app.update-old).
-            Environment.CurrentDirectory = Path.Combine(destino, "app");
+            Environment.CurrentDirectory = Path.Combine(final, "app");
             UpdateExisting(["--update", "--destination", destino]);
 
-            if (!File.Exists(Path.Combine(destino, "app", "Pitstop.exe"))) return 12;
-            if (File.Exists(Path.Combine(destino, "app", "versao-antiga.txt"))) return 13;
-            if (File.ReadAllText(Path.Combine(destino, ".env")) != "JDK_HOME=C:\\jdk-teste") return 14;
-            if (!File.ReadAllText(Path.Combine(destino, "config", "perfis.json")).Contains("\"teste\"")) return 15;
-            if (CaminhoDentro(Environment.CurrentDirectory, Path.Combine(destino, "app"))) return 17;
+            if (!File.Exists(Path.Combine(final, "app", "Pitstop.exe"))) return 12;
+            if (File.Exists(Path.Combine(final, "app", "versao-antiga.txt"))) return 13;
+            if (File.ReadAllText(Path.Combine(final, ".env")) != "JDK_HOME=C:\\jdk-teste") return 14;
+            if (!File.ReadAllText(Path.Combine(final, "config", "perfis.json")).Contains("\"teste\"")) return 15;
+            if (CaminhoDentro(Environment.CurrentDirectory, Path.Combine(final, "app"))) return 17;
             return 0;
         }
         catch { return 16; }
@@ -158,7 +163,8 @@ static class InstallerEngine
         Process? bloqueador = null;
         try
         {
-            var app = Path.Combine(destino, "app");
+            var final = NormalizeDestination(destino);
+            var app = Path.Combine(final, "app");
             Directory.CreateDirectory(app);
             var pit = Path.Combine(app, "pit.exe");
             File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), pit, true);
@@ -176,7 +182,7 @@ static class InstallerEngine
 
             try
             {
-                AguardarBloqueadoresPitstop(destino);
+                AguardarBloqueadoresPitstop(final);
                 return 19;
             }
             catch (IOException ex)
@@ -478,10 +484,11 @@ static class InstallerEngine
             if (!File.Exists(installScript)) throw new FileNotFoundException("instalar.ps1 não está no payload.");
             if (!File.Exists(toolsScript)) throw new FileNotFoundException("ferramentas.ps1 não está no payload.");
 
+            var destino = NormalizeDestination(o.Destination);
             var installArgs = new List<string>
             {
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installScript,
-                "-Destino", o.Destination, "-Silencioso", "-NaoAbrir"
+                "-Destino", destino, "-Silencioso", "-NaoAbrir"
             };
             if (o.DesktopShortcut) installArgs.Add("-Desktop");
             if (!o.AddToPath) installArgs.Add("-SemPath");
@@ -497,7 +504,7 @@ static class InstallerEngine
             var toolArgs = new List<string>
             {
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", toolsScript,
-                "-Destino", o.Destination
+                "-Destino", destino
             };
             AddSwitch(toolArgs, "-BaixarJdk", o.DownloadJdk);
             AddSwitch(toolArgs, "-BaixarMaven", o.DownloadMaven);
@@ -517,7 +524,7 @@ static class InstallerEngine
 
             if (o.LaunchAfterInstall)
             {
-                var exe = Path.Combine(o.Destination, "app", "Pitstop.exe");
+                var exe = Path.Combine(destino, "app", "Pitstop.exe");
                 if (!File.Exists(exe)) throw new FileNotFoundException("Pitstop.exe não foi instalado.", exe);
                 log("Abrindo o Pitstop...");
                 Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });

@@ -144,7 +144,7 @@ sealed partial class Janela
                 "zip" => "pacote · " + (VersaoDe(JsonAux.Txt(p, "pacote")) is { Length: > 0 } v ? v : "Java"),
                 _ => (t == "war" ? "war" : "Tomcat") + " · :" + (JsonAux.Num(p, "porta") ?? 8080),
             };
-            estTxt.Text = est.Txt;
+            estTxt.Text = est.Txt + " · " + MemoriaTexto(status.FirstOrDefault(s => s.Nome == n)?.Execucao);
             b.Classes.Set("sel", n == atual);
         }
     }
@@ -161,7 +161,7 @@ sealed partial class Janela
         nomeTxt.Text = atual;
         tipoTxt.Text = NomeTipo[tipo];
         Ui.PintarPonto(pillPonto, est.K);
-        pillTxt.Text = est.Pill;
+        pillTxt.Text = est.Pill + " · " + MemoriaTexto(st?.Execucao);
         var pacote = JsonAux.Txt(p, "pacote");
         alvoTxt.Text = tipo switch
         {
@@ -216,6 +216,7 @@ sealed partial class Janela
 
     static string UltimoComando(Ultimo? u) => u == null ? "—"
         : u.Motivo == "timeout" ? "timeout"
+        : u.Motivo == "auto-duracao" ? "auto-parado após duração"
         : u.Motivo == "usuario" ? "interrompida"
         : u.Ok ? "ok · " + Dur(u.Duracao)
         : "falhou" + (u.Codigo is int c ? " · " + c : "");
@@ -488,10 +489,7 @@ sealed partial class Janela
         var ok = await ComVeu(() => Dialogo.Confirmar(this, "Excluir " + alvo + "?",
             "Sai do perfis.json (a versão anterior fica em perfis.json.bak). A pasta da base não é apagada.", "Excluir perfil", () =>
             {
-                var salvo = Perfis[alvo]!;
-                Perfis.Remove(alvo);
-                try { cfg["_versao"] = Config.Gravar(cfg); }
-                catch { Perfis[alvo] = salvo; throw; }
+                runner.Remover(alvo, JsonAux.Txt(cfg, "_versao"));
             }));
         if (!ok) return;
         sujo = false;

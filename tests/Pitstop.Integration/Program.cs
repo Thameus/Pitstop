@@ -1,13 +1,65 @@
 using Pitstop;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 static void Checar(bool condicao, string mensagem)
 {
     if (!condicao) throw new Exception("FALHA: " + mensagem);
 }
 var raiz = Path.Combine(Path.GetTempPath(), "pitstop-integration-" + Guid.NewGuid().ToString("N"));
+var raizAnterior = Environment.GetEnvironmentVariable("PIT_RAIZ");
 try
 {
     Directory.CreateDirectory(raiz);
+    // Fixture isolada para a parada em lote; nenhum perfil real ou processo real é usado.
+    Environment.SetEnvironmentVariable("PIT_RAIZ", raiz);
+    // #36: remoção isolada altera somente o registro e exige a versão lida.
+    var configDir = Path.Combine(raiz, "config");
+    Directory.CreateDirectory(configDir);
+    var dados = Path.Combine(raiz, "cache", "RemoverTeste");
+    Directory.CreateDirectory(dados);
+    var arquivoDados = Path.Combine(dados, "nao-apagar.txt");
+    File.WriteAllText(arquivoDados, "preservar");
+    File.WriteAllText(Path.Combine(configDir, "perfis.json"), "{\n  \"perfis\": {\n    \"RemoverTeste\": { \"tipo\": \"comando\", \"comando\": \"echo teste\" }\n  }\n}\n");
+    var versaoRemover = Config.Versao();
+    new Runner().Remover("RemoverTeste", versaoRemover);
+    Checar(!Config.NomesPerfis(Config.Ler()).Contains("RemoverTeste"), "remover deve apagar somente o registro");
+    Checar(File.Exists(arquivoDados), "remover não pode apagar cache/base/dados");
+    var perfilParaConflito = Path.Combine(configDir, "perfis.json");
+    File.WriteAllText(perfilParaConflito, "{\n  \"perfis\": {\n    \"Conflito\": { \"tipo\": \"comando\", \"comando\": \"echo teste\" }\n  }\n}\n");
+    var versaoAntiga = Config.Versao();
+    File.AppendAllText(perfilParaConflito, "\n");
+    File.SetLastWriteTimeUtc(perfilParaConflito, DateTime.UtcNow.AddSeconds(2));
+    var recusouConflito = false;
+    try { Config.Remover("Conflito", versaoAntiga); } catch (ErroRunner) { recusouConflito = true; }
+    Checar(recusouConflito && Config.NomesPerfis(Config.Ler()).Contains("Conflito"), "versão concorrente deve recusar remoção");
+    Console.WriteLine("OK #36 remoção somente da configuração, preservação de dados e versão concorrente");
+    // #40: o marcador de falha é literal, guarda a primeira linha e vence prontidão na mesma linha.
+    using var processoTeste = new Process();
+    var execucaoTeste = new Execucao
+    {
+        Child = processoTeste, Tipo = "teste", FalhaLog = "ERROR [x]",
+        ProntoRe = new System.Text.RegularExpressions.Regex("pronto"),
+    };
+    Checar(!Runner.ProcessarLinhaSaida(execucaoTeste, "iniciando"), "linha sem marcador não pode marcar pronto");
+    var linhaComAmbos = "ERROR [x] pronto";
+    Checar(!Runner.ProcessarLinhaSaida(execucaoTeste, linhaComAmbos) && execucaoTeste.LinhaFalha == linhaComAmbos,
+        "falhaLog deve vencer prontoLog na mesma linha no estado do Runner");
+    Checar(!Runner.ProcessarLinhaSaida(execucaoTeste, "ERROR [x] pronto novamente") &&
+        execucaoTeste.LinhaFalha == linhaComAmbos, "falhaLog deve guardar a primeira linha correspondente");
+    Checar(!Runner.LinhaCasaFalha("ERROR [x]", "ERROR x"), "falhaLog não deve interpretar regex");
+    var novaExecucao = new Execucao { Child = processoTeste, Tipo = "teste", FalhaLog = "ERROR [x]" };
+    Checar(novaExecucao.LinhaFalha == null, "nova execução deve limpar falha anterior");
+    Console.WriteLine("OK #40 falhaLog literal, primeira linha e precedência sobre prontoLog");
+    Checar(MemoriaProcessos.Medir(0) is { MemoriaBytes: null, Estado: "semPid" },
+        "memória sem PID deve ser explicitamente indisponível");
+    Checar(MemoriaProcessos.Medir(-1) is { MemoriaBytes: null, Estado: "semPid" },
+        "PID inválido não pode virar zero");
+    Checar(MemoriaProcessos.SomarDeterministico([10, 20, 30]) == 60, "soma determinística de memória");
+    Checar(MemoriaProcessos.SomarDeterministico([10, null]) == null, "soma parcial deve ser recusada");
+    Console.WriteLine("OK #41 contrato de memória: sem PID, indisponibilidade e soma determinística");
     var repo = Path.Combine(raiz, "repo");
     var src = Path.Combine(repo, "src", "main", "webapp");
     var doc = Path.Combine(repo, "target", "app");
@@ -109,6 +161,52 @@ try
     catch (ErroRunner) { recusou = true; }
     Checar(recusou, "health URL remota deve ser recusada");
     Console.WriteLine("OK healthcheck restrito ao localhost");
+
+    // Polling de readiness: resposta transitória 503 não conclui; a seguinte 200 conclui sem perfil Tomcat.
+    using (var servidor = new TcpListener(IPAddress.Loopback, 0))
+    {
+        servidor.Start();
+        var portaPronto = ((IPEndPoint)servidor.LocalEndpoint).Port;
+        var respostas = new[] { 503, 200 };
+        var atendimento = Task.Run(async () =>
+        {
+            foreach (var status in respostas)
+            {
+                using var conexao = await servidor.AcceptTcpClientAsync();
+                using var fluxo = conexao.GetStream();
+                var resposta = Encoding.ASCII.GetBytes("HTTP/1.0 " + status + (status == 503 ? " Service Unavailable" : " OK") +
+                    "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                await fluxo.WriteAsync(resposta);
+                await fluxo.FlushAsync();
+                await Task.Delay(100);
+            }
+        });
+        using var processo = Process.Start(new ProcessStartInfo
+        {
+            FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+            Arguments = "/c ping -n 10 127.0.0.1 > nul",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        }) ?? throw new Exception("não iniciou processo auxiliar do teste");
+        try
+        {
+            var urlPronto = Tomcat.ValidarProntoUrl(new Perfil
+            {
+                Porta = portaPronto,
+                ProntoUrl = "http://127.0.0.1:" + portaPronto + "/health",
+            })!;
+            Checar(await Tomcat.AguardarPronto(processo, urlPronto, CancellationToken.None) is long,
+                "readiness deve ignorar 503 e concluir em 200");
+            await atendimento;
+            processo.WaitForExit();
+        }
+        finally
+        {
+            servidor.Stop();
+            if (!processo.HasExited) processo.Kill(true);
+        }
+    }
+    Console.WriteLine("OK polling readiness 503 -> 200");
 
     var eventos = 0;
     using (var watcher = new ObservadorSync(p, () => Interlocked.Increment(ref eventos)))
@@ -231,10 +329,83 @@ try
         "CATALINA_OPTS deve chegar também no modo Debug");
     Console.WriteLine("OK #23 vmArgs isolados e encaminhados ao Tomcat normal e Debug");
 
+    // #42: fixture Comando isolado; o prazo começa no pronto e só afeta a execução gerenciada.
+    var comandoFixture = So.Windows ? "ping -n 30 127.0.0.1 > nul" : "sleep 30";
+    var shellFixture = So.Windows ? "cmd" : "sh";
+    var configAuto = new System.Text.Json.Nodes.JsonObject
+    {
+        ["perfis"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["auto-fixture"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["tipo"] = "comando", ["comando"] = comandoFixture, ["shell"] = shellFixture, ["autoPararAposSeg"] = 1,
+            },
+            ["sem-auto-fixture"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["tipo"] = "comando", ["comando"] = comandoFixture, ["shell"] = shellFixture,
+            },
+        },
+    };
+    File.WriteAllText(Path.Combine(raiz, "config", "perfis.json"), configAuto.ToJsonString());
+    var runnerAuto = new Runner();
+    await runnerAuto.Iniciar("auto-fixture", false);
+    Ultimo? ultimoAuto = null;
+    for (var i = 0; i < 60 && ultimoAuto == null; i++)
+    {
+        ultimoAuto = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture").Ultimo;
+        if (ultimoAuto == null) await Task.Delay(100);
+    }
+    Checar(ultimoAuto?.Motivo == "auto-duracao", "auto-parada deve encerrar o Comando fixture com motivo próprio");
+
+    await runnerAuto.Iniciar("sem-auto-fixture", false);
+    await Task.Delay(1500);
+    var semAuto = (await runnerAuto.Status()).Single(s => s.Nome == "sem-auto-fixture");
+    Checar(semAuto.Execucao != null && semAuto.Ultimo == null, "perfil sem autoPararAposSeg não pode ser afetado");
+    await runnerAuto.Parar("sem-auto-fixture");
+
+    await runnerAuto.Iniciar("auto-fixture", false);
+    await runnerAuto.Parar("auto-fixture");
+    var manual = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture").Ultimo;
+    Checar(manual?.Motivo == "usuario", "stop manual antes do prazo deve vencer a auto-parada");
+    await runnerAuto.Iniciar("auto-fixture", false);
+    var pidAntesReinicio = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture").Execucao?.Pid;
+    runnerAuto.ReservarReinicio("auto-fixture");
+    Ultimo? depoisReinicio = null;
+    var viuIntervaloParado = false;
+    var viuNovoProcesso = false;
+    for (var i = 0; i < 160 && depoisReinicio?.Motivo != "auto-duracao"; i++)
+    {
+        var estadoReinicio = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture");
+        viuIntervaloParado |= estadoReinicio.Execucao == null;
+        viuNovoProcesso |= estadoReinicio.Execucao?.Pid is int pid && pid != pidAntesReinicio;
+        depoisReinicio = estadoReinicio.Ultimo;
+        if (depoisReinicio?.Motivo != "auto-duracao") await Task.Delay(100);
+    }
+    Checar(viuNovoProcesso && depoisReinicio?.Motivo == "auto-duracao",
+        "reinício deve criar novo prazo sem corrida com o stop anterior (intervalo=" + viuIntervaloParado +
+        ", novo=" + viuNovoProcesso + ", motivo=" + depoisReinicio?.Motivo + ")");
+    Console.WriteLine("OK #42 auto-parada desde pronto, opt-in, stop/restart e ownership do Runner");
+
+    // #39: uma porta ocupada sem pit.pid/ownership não pode ser parada em lote.
+    using (var portaAlheia = new TcpListener(IPAddress.Loopback, 0))
+    {
+        portaAlheia.Start();
+        var porta = ((IPEndPoint)portaAlheia.LocalEndpoint).Port;
+        Directory.CreateDirectory(Path.Combine(raiz, "config"));
+        File.WriteAllText(Path.Combine(raiz, "config", "perfis.json"),
+            "{\"perfis\":{\"sem-dono\":{\"tipo\":\"tomcat\",\"porta\":" + porta +
+            ",\"portaShutdown\":" + (porta + 1) + ",\"artefatos\":[]}}}");
+        await new Runner().PararTodos(["sem-dono"]);
+        using var prova = new TcpClient();
+        await prova.ConnectAsync(IPAddress.Loopback, porta);
+        Console.WriteLine("OK #39 parada em lote não usa porta sem ownership");
+    }
+
     Console.WriteLine("INTEGRATION OK");
 }
 finally
 {
+    Environment.SetEnvironmentVariable("PIT_RAIZ", raizAnterior);
     try { if (Directory.Exists(raiz)) Directory.Delete(raiz, true); }
     catch (IOException) { }
 }
