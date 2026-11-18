@@ -28,6 +28,9 @@ public sealed class Execucao
     public int? AutoPararAposSeg { get; init; }
     /// <summary>Prazo absoluto da auto-parada; começa quando Pronto é marcado.</summary>
     public long? AutoPararAte { get; set; }
+    /// <summary>Falhas seguidas da auto-parada; o monitor espera o recuo antes de tentar de novo.</summary>
+    public int FalhasAutoParada { get; set; }
+    public long ProximaTentativaAutoParada { get; set; }
     public int? PortaPronto { get; init; }
     public bool PortaOcupadaAntes { get; init; }
     public string? AbrirUrlAoPronto { get; init; }
@@ -165,6 +168,7 @@ public sealed class Runner
                     foreach (var (nome, exec) in estado)
                     {
                         if (exec.AutoPararAte is not long ate || exec.MotivoParada != null || exec.Parando) continue;
+                        if (exec.ProximaTentativaAutoParada > Agora.Ms) { existePrazoAtivo = true; continue; }
                         if (exec.Child.HasExited) continue;
                         existePrazoAtivo = true;
                         if (ate <= Agora.Ms)
@@ -192,9 +196,26 @@ public sealed class Runner
 
     async Task PararAutomaticamente(string nome, Execucao exec)
     {
-        Log(nome, "[pit] auto-parada após " + exec.AutoPararAposSeg + "s desde pronto; encerrando...");
+        if (exec.FalhasAutoParada == 0)
+            Log(nome, "[pit] auto-parada após " + exec.AutoPararAposSeg + "s desde pronto; encerrando...");
         try { await PararAgora(nome, exec).ConfigureAwait(false); }
-        catch (Exception ex) { Log(nome, "[pit] ERRO auto-parada: " + ex.Message); }
+        catch (Exception ex)
+        {
+            // desfaz a marcação para o monitor tentar de novo (com recuo); só loga a primeira falha
+            bool primeira;
+            lock (trava)
+            {
+                primeira = exec.FalhasAutoParada == 0;
+                if (estado.GetValueOrDefault(nome) == exec && exec.MotivoParada == "auto-duracao")
+                {
+                    exec.MotivoParada = null;
+                    exec.Parando = false;
+                    exec.FalhasAutoParada++;
+                    exec.ProximaTentativaAutoParada = Agora.Ms + Math.Min(30000L, 1000L << Math.Min(exec.FalhasAutoParada, 5));
+                }
+            }
+            if (primeira) Log(nome, "[pit] ERRO auto-parada (nova tentativa com recuo): " + ex.Message);
+        }
     }
 
     Execucao? Em(string nome)
@@ -262,6 +283,9 @@ public sealed class Runner
         try { return re?.IsMatch(l) == true; }
         catch (RegexMatchTimeoutException) { return false; }
     }
+
+    /// <summary>O timer de 3 s não pode declarar pronto uma execução cuja falhaLog já casou.</summary>
+    public static bool PodeMarcarProntoPorTempo(Execucao reg) => reg.LinhaFalha == null;
 
     /// <summary>Falha de log é texto literal, sem regex; vazio desabilita a detecção.</summary>
     public static bool LinhaCasaFalha(string falhaLog, string linha) =>
@@ -363,7 +387,7 @@ public sealed class Runner
         if (reg.Tipo != "build" && reg.ProntoRe == null && reg.PortaPronto == null)
         {
             if (reg.Tipo == "comando") MarcarPronto(nome, reg);
-            else _ = Task.Delay(3000).ContinueWith(_ => MarcarPronto(nome, reg));
+            else _ = Task.Delay(3000).ContinueWith(_ => { if (PodeMarcarProntoPorTempo(reg)) MarcarPronto(nome, reg); });
         }
         return Task.Run(async () =>
         {
@@ -517,6 +541,9 @@ public sealed class Runner
         if (!vivo()) return;
         Log(nome, "[pit] não encerrou em " + ComandoApp.StopTimeoutSeg + "s; forçando a árvore do processo " + pid);
         So.Encerrar(pid, true);
+        fim = Agora.Ms + ComandoApp.StopTimeoutSeg * 1000L;
+        while (vivo() && Agora.Ms < fim) await Task.Delay(50).ConfigureAwait(false);
+        if (vivo()) Log(nome, "[pit] pid " + pid + " ainda vivo após encerramento forçado");
     }
 
     async Task PararComando(string nome, Perfil p, Execucao? e)
@@ -1365,10 +1392,10 @@ public sealed class Runner
         };
     }
 
-    static void MedirMemoria(StatusExecucao? exec)
+    static void MedirMemoria(StatusExecucao? exec, Lazy<ArvoreProcessos?> arvore)
     {
         if (exec == null) return;
-        var resultado = MemoriaProcessos.Medir(exec.Pid);
+        var resultado = MemoriaProcessos.Medir(exec.Pid, arvore);
         exec.MemoriaBytes = resultado.MemoriaBytes;
         exec.EstadoMemoria = resultado.Estado;
     }
@@ -1377,6 +1404,8 @@ public sealed class Runner
     public async Task<List<StatusPerfil>> Status()
     {
         var cfg = Config.Ler();
+        // uma única captura da árvore de processos por consulta, compartilhada por todos os perfis
+        var arvore = new Lazy<ArvoreProcessos?>(ArvoreProcessos.Capturar);
         var itens = await Task.WhenAll(Config.NomesPerfis(cfg).Select(async nome =>
         {
             var p = Config.LerPerfil(cfg, nome);
@@ -1397,7 +1426,7 @@ public sealed class Runner
             {
                 var r = e == null && exec == null ? ExecucaoExterna(p,
                     p.Porta <= 0 || await Proc.PortaOcupada(p.Porta).ConfigureAwait(false)) : null;
-                MedirMemoria(exec ?? r);
+                MedirMemoria(exec ?? r, arvore);
                 return new StatusPerfil
                 {
                     Nome = nome, Tipo = "comando", Base = p.Base, Porta = p.Porta > 0 ? p.Porta : null, Url = p.Url,
@@ -1410,7 +1439,7 @@ public sealed class Runner
             {
                 // sem porta: "em uso" = processo do runner rodando, ou o pid gravado (pit up / outra instância)
                 var r = e == null && exec == null ? ExecucaoExterna(p, true) : null;
-                MedirMemoria(exec ?? r);
+                MedirMemoria(exec ?? r, arvore);
                 return new StatusPerfil
                 {
                     Nome = nome, Tipo = "java", Base = p.Base, PortaDebug = p.PortaDebug, MainClass = p.EhZip ? null : p.MainClass,
@@ -1423,7 +1452,7 @@ public sealed class Runner
             {
                 var portaAberta = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
                 var r = e == null && exec == null ? ExecucaoExterna(p, portaAberta || p.Porta <= 0) : null;
-                MedirMemoria(exec ?? r);
+                MedirMemoria(exec ?? r, arvore);
                 return new StatusPerfil
                 {
                     Nome = nome, Tipo = "npm", Base = p.Base, Porta = p.Porta, Url = p.Url, Script = p.Script,
@@ -1433,7 +1462,7 @@ public sealed class Runner
             }
             var portaTomcatAberta = await Proc.PortaOcupada(p.Porta).ConfigureAwait(false);
             var tomcatExterno = e == null && exec == null ? ExecucaoExterna(p, portaTomcatAberta) : null;
-            MedirMemoria(exec ?? tomcatExterno);
+            MedirMemoria(exec ?? tomcatExterno, arvore);
             return new StatusPerfil
             {
                 Nome = nome, Tipo = "tomcat", Base = p.Base, Porta = p.Porta, PortaDebug = p.PortaDebug, Url = p.Url,

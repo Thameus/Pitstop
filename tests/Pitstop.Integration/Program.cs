@@ -4,6 +4,12 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
+if (args is ["--readiness-helper"])
+{
+    await Task.Delay(TimeSpan.FromSeconds(30));
+    return;
+}
+
 static void Checar(bool condicao, string mensagem)
 {
     if (!condicao) throw new Exception("FALHA: " + mensagem);
@@ -181,13 +187,14 @@ try
                 await Task.Delay(100);
             }
         });
-        using var processo = Process.Start(new ProcessStartInfo
+        var auxiliar = new ProcessStartInfo
         {
-            FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-            Arguments = "/c ping -n 10 127.0.0.1 > nul",
+            FileName = Environment.ProcessPath ?? throw new Exception("executável do teste não encontrado"),
             UseShellExecute = false,
             CreateNoWindow = true,
-        }) ?? throw new Exception("não iniciou processo auxiliar do teste");
+        };
+        auxiliar.ArgumentList.Add("--readiness-helper");
+        using var processo = Process.Start(auxiliar) ?? throw new Exception("não iniciou processo auxiliar do teste");
         try
         {
             var urlPronto = Tomcat.ValidarProntoUrl(new Perfil
@@ -198,7 +205,6 @@ try
             Checar(await Tomcat.AguardarPronto(processo, urlPronto, CancellationToken.None) is long,
                 "readiness deve ignorar 503 e concluir em 200");
             await atendimento;
-            processo.WaitForExit();
         }
         finally
         {
@@ -364,9 +370,12 @@ try
     await runnerAuto.Parar("sem-auto-fixture");
 
     await runnerAuto.Iniciar("auto-fixture", false);
+    var inicioManual = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture").Execucao?.Desde;
     await runnerAuto.Parar("auto-fixture");
-    var manual = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture").Ultimo;
-    Checar(manual?.Motivo == "usuario", "stop manual antes do prazo deve vencer a auto-parada");
+    var estadoManual = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture");
+    var manual = estadoManual.Ultimo;
+    Checar(inicioManual != null && estadoManual.Execucao == null && manual?.Fim >= inicioManual && manual.Motivo == "usuario",
+        "stop manual antes do prazo deve concluir a execução atual e vencer a auto-parada");
     await runnerAuto.Iniciar("auto-fixture", false);
     var pidAntesReinicio = (await runnerAuto.Status()).Single(s => s.Nome == "auto-fixture").Execucao?.Pid;
     runnerAuto.ReservarReinicio("auto-fixture");
@@ -385,6 +394,54 @@ try
         "reinício deve criar novo prazo sem corrida com o stop anterior (intervalo=" + viuIntervaloParado +
         ", novo=" + viuNovoProcesso + ", motivo=" + depoisReinicio?.Motivo + ")");
     Console.WriteLine("OK #42 auto-parada desde pronto, opt-in, stop/restart e ownership do Runner");
+
+    // #43: falha ao parar automaticamente desfaz a marcação e o monitor tenta de novo (perfil removido e depois restaurado).
+    {
+        var perfilFalha = new System.Text.Json.Nodes.JsonObject
+        {
+            ["tipo"] = "comando", ["comando"] = comandoFixture, ["shell"] = shellFixture, ["autoPararAposSeg"] = 1,
+        };
+        string Config43(bool comPerfil)
+        {
+            var c = new System.Text.Json.Nodes.JsonObject { ["perfis"] = new System.Text.Json.Nodes.JsonObject() };
+            if (comPerfil) c["perfis"]!["auto-falha"] = perfilFalha.DeepClone();
+            else c["perfis"]!["outro"] = perfilFalha.DeepClone();
+            return c.ToJsonString();
+        }
+        var arquivoPerfis = Path.Combine(raiz, "config", "perfis.json");
+        File.WriteAllText(arquivoPerfis, Config43(true));
+        var runnerFalha = new Runner();
+        await runnerFalha.Iniciar("auto-falha", false);
+        File.WriteAllText(arquivoPerfis, Config43(false)); // LerPerfil passa a falhar na hora da parada
+        await Task.Delay(1800);
+        Checar(runnerFalha.EmExecucao().Contains("auto-falha"), "processo deve continuar vivo enquanto a parada automática falha");
+        File.WriteAllText(arquivoPerfis, Config43(true));
+        Ultimo? ultimoFalha = null;
+        for (var i = 0; i < 150 && ultimoFalha == null; i++)
+        {
+            ultimoFalha = (await runnerFalha.Status()).Single(s => s.Nome == "auto-falha").Ultimo;
+            if (ultimoFalha == null) await Task.Delay(100);
+        }
+        Checar(ultimoFalha?.Motivo == "auto-duracao", "auto-parada deve tentar de novo após falha e encerrar o processo");
+        Console.WriteLine("OK #43 auto-parada com falha reverte Parando e repete com recuo");
+
+        // falhaLog já casado: o timer de 3 s não pode marcar pronto
+        using var procFalha = Process.GetCurrentProcess();
+        var comFalha = new Execucao { Child = procFalha, Tipo = "teste", FalhaLog = "ERRO" };
+        Checar(Runner.PodeMarcarProntoPorTempo(comFalha), "sem falha detectada o timer pode marcar pronto");
+        Runner.ProcessarLinhaSaida(comFalha, "ERRO fatal");
+        Checar(!Runner.PodeMarcarProntoPorTempo(comFalha), "após falhaLog o timer não pode marcar pronto");
+        Console.WriteLine("OK #44 timer de 3 s respeita falhaLog");
+
+        // filho que sumiu entre snapshot e leitura é ignorado; a raiz continua exigida
+        var eu = Environment.ProcessId;
+        var arvoreFalsa = new ArvoreProcessos(new Dictionary<int, List<int>> { [eu] = [int.MaxValue - 7] });
+        var medida = MemoriaProcessos.MedirComArvore(eu, arvoreFalsa);
+        Checar(medida is { Estado: "disponivel", MemoriaBytes: > 0 }, "filho inexistente não pode invalidar a medição: " + medida.Estado);
+        var semRaiz = MemoriaProcessos.MedirComArvore(int.MaxValue - 7, arvoreFalsa);
+        Checar(semRaiz.MemoriaBytes == null && semRaiz.Estado == "indisponivel", "raiz ilegível deve ser indisponível");
+        Console.WriteLine("OK #45 medição de memória tolera filho que sumiu");
+    }
 
     // #39: uma porta ocupada sem pit.pid/ownership não pode ser parada em lote.
     using (var portaAlheia = new TcpListener(IPAddress.Loopback, 0))
