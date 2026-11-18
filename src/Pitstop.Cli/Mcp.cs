@@ -66,11 +66,11 @@ public static class Mcp
 
     public static async Task<int> Rodar()
     {
-        Console.InputEncoding = new UTF8Encoding(false);
+        var entrada = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false));
         Console.OutputEncoding = new UTF8Encoding(false);
         using var http = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + Env.Num("RUNNER_PORTA", 9999)), Timeout = TimeSpan.FromSeconds(20) };
         string? linha;
-        while ((linha = await Console.In.ReadLineAsync()) != null)
+        while ((linha = await entrada.ReadLineAsync()) != null)
         {
             JsonElement? id = null;
             try
