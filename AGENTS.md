@@ -40,3 +40,29 @@ Antes de alterar ou iniciar qualquer perfil, descubra o estado atual e as açõe
 - Teste da integração IA: powershell -File tests/mcp-smoke.ps1.
 - Testes gerais: dotnet run --project tests/Pitstop.Integration -c Release
   e powershell -File tests/smoke.ps1.
+
+---
+
+## MCP Compatibility
+
+Preserve stdout exclusivamente para tráfego de protocolo e coloque diagnósticos no stderr.
+Mantenha schemas e anotações read-only/destrutivas precisas.
+Execute `tests/mcp-smoke.ps1` em sua raiz isolada.
+Teste comportamento de UI/API indisponível e nunca use perfis reais para testes de smoke.
+
+## Safe Operation
+
+Execute `pit capabilities` e inspecione status antes de ação.
+Chamadas read-only de status/descoberta/logs são seguras.
+Pergunte antes de start, stop, restart, build, sync, save/delete/rename profile, settings ou shutdown.
+Nunca exponha `.env`, segredos de perfis ou porta 9999 além de loopback.
+
+## Release
+
+Leia `docs/BUILD-RELEASE.md`.
+Garanta que versão e tag futura correspondam.
+Execute testes de integração/smoke/package, verificações de privacidade, notices e geração SHA-256.
+Preserve diretórios de dados do usuário.
+Nunca crie/push tag ou GitHub Release sem aprovação explícita.
+
+Consulte tambem .agents/README.md deste projeto.
