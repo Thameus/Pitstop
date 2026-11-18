@@ -21,7 +21,7 @@ O objetivo não é redesenhar o produto. A identidade atual é preservada: inter
 
 Baseline técnico da revisão:
 
-- versão: **3.0.6**;
+- versão: **3.0.9**;
 - janela desktop padrão: **1320 × 860**;
 - janela mínima: **980 × 620**;
 - sidebar desktop: **280 px**;
