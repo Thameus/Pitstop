@@ -1,6 +1,7 @@
 #!/bin/sh
 # Instalador do Pitstop para Linux (sem root).
-# Copia esta pasta para ~/.local/share/pitstop (ou o destino informado), cria os comandos "pitstop" e "pit" em
+# Copia esta pasta para ~/.local/share/pitstop (ou o destino informado; se não terminar em pitstop/Pitstop e não for uma
+# instalação existente, cria a subpasta pitstop), cria os comandos "pitstop" e "pit" em
 # ~/.local/bin, o atalho no menu de aplicativos (.desktop) e abre o Pitstop. Reinstalar/atualizar mantém o que é
 # seu: .env, config/, cache/, logs/ e bases/.
 # Uso: sh instalar.sh [destino] [--sim]   (--sim = não pergunta nada)
@@ -8,7 +9,7 @@ set -eu
 
 ORIGEM=${PITSTOP_SOURCE_ROOT:-$(cd "$(dirname "$0")" && pwd)}
 DADOS="${XDG_DATA_HOME:-$HOME/.local/share}"
-DESTINO="$DADOS/Pitstop"
+DESTINO="$DADOS/pitstop"
 SIM=0
 NAO_ABRIR=0
 for a in "$@"; do
@@ -40,11 +41,16 @@ if [ "$SIM" = 0 ]; then
   [ -n "$r" ] && DESTINO="$r"
 fi
 
-case "$(basename "${DESTINO%/}")" in
-  Pitstop) ;;
-  *) DESTINO="$DESTINO/Pitstop" ;;
-esac
-DESTINO=$(cd "$(dirname "$DESTINO")" 2>/dev/null && printf '%s/%s' "$PWD" "$(basename "$DESTINO")" || printf '%s' "$DESTINO")
+DESTINO=${DESTINO%/}
+[ -n "$DESTINO" ] || DESTINO=/
+# Instalação existente: usa como está. Senão acrescenta "pitstop" (aceita pitstop/Pitstop como último trecho).
+if [ ! -f "$DESTINO/app/Pitstop" ]; then
+  case "$(basename "$DESTINO")" in
+    pitstop|Pitstop) ;;
+    *) if [ "$DESTINO" = / ]; then DESTINO=/pitstop; else DESTINO="$DESTINO/pitstop"; fi ;;
+  esac
+fi
+DESTINO=$(cd "$(dirname "$DESTINO")" 2>/dev/null && printf '%s/%s' "${PWD%/}" "$(basename "$DESTINO")" || printf '%s' "$DESTINO")
 
 if pgrep -f "$DESTINO/app/Pitstop" >/dev/null 2>&1; then
   echo "  O Pitstop está aberto. Feche pelo ícone da bandeja ou menu ⋯ da janela (Parar e Sair) e rode de novo."
@@ -54,9 +60,13 @@ fi
 if [ "$ORIGEM" != "$DESTINO" ]; then
   echo "  Copiando para $DESTINO ..."
   mkdir -p "$DESTINO"
-  # app/ e web/ são do programa: troca inteiro (versão nova não deixa arquivo velho para trás)
-  rm -rf "$DESTINO/app" "$DESTINO/web"
-  cp -R "$ORIGEM/app" "$ORIGEM/web" "$DESTINO/"
+  # app/, web/ e third-party/ são do programa: troca inteiro (versão nova não deixa arquivo velho para trás)
+  # (só mexe numa pasta se ela existir na origem)
+  for d in app web third-party; do
+    [ -d "$ORIGEM/$d" ] || continue
+    rm -rf "$DESTINO/$d"
+    cp -R "$ORIGEM/$d" "$DESTINO/"
+  done
   if [ -d "$ORIGEM/docs" ]; then
     mkdir -p "$DESTINO/docs"
     cp -R "$ORIGEM/docs/." "$DESTINO/docs/"

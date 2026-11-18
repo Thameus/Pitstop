@@ -30,6 +30,9 @@ static class InstallerEngine
     {
         var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw.Trim().Trim('"')));
         var semSeparadorFinal = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        // Já existe uma instalação do Pitstop aqui: usa como está (reinstalar/atualizar não aninha subpasta).
+        if (File.Exists(Path.Combine(full, "app", "Pitstop.exe")))
+            return full;
         var nomeFinal = Path.GetFileName(semSeparadorFinal);
         if (string.Equals(nomeFinal, "Pitstop", StringComparison.OrdinalIgnoreCase))
             return full;

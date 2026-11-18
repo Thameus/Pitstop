@@ -187,6 +187,18 @@ try {
         powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $pkg 'instalar.ps1') -Destino $rootDest -Silencioso -NaoAbrir -SemPath -SemMenu -SemRegistro
         if ($LASTEXITCODE -ne 0) { throw "instalar.ps1 root destination failed with exit code $LASTEXITCODE" }
         if (-not (Test-Path (Join-Path $rootDest 'Pitstop\app\Pitstop.exe'))) { throw 'root destination smoke did not install Pitstop\app\Pitstop.exe' }
+        # Regressão: destino que já contém uma instalação (app\Pitstop.exe) é atualizado no lugar, sem subpasta Pitstop aninhada.
+        $existente = Join-Path $tmp 'PitstopApp-existente'
+        New-Item -ItemType Directory -Force (Join-Path $existente 'app') | Out-Null
+        Set-Content -Encoding ASCII (Join-Path $existente 'app\Pitstop.exe') 'antigo'
+        Set-Content -Encoding ASCII (Join-Path $existente 'app\old.txt') 'old'
+        powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $pkg 'instalar.ps1') -Destino $existente -Silencioso -NaoAbrir -SemPath -SemMenu -SemRegistro
+        if ($LASTEXITCODE -ne 0) { throw "instalar.ps1 existing destination failed with exit code $LASTEXITCODE" }
+        if ((Get-Item (Join-Path $existente 'app\Pitstop.exe')).Length -le 100) { throw 'existing install was not updated in place' }
+        if (Test-Path (Join-Path $existente 'app\old.txt')) { throw 'existing install left old app file' }
+        if (Test-Path (Join-Path $existente 'Pitstop')) { throw 'existing install was nested into a Pitstop subfolder' }
+        if (-not (Test-Path (Join-Path $rootDest 'Pitstop\THIRD-PARTY-NOTICES.md'))) { throw 'Windows install omitted root third-party notices' }
+        if (-not (Test-Path (Join-Path $rootDest 'Pitstop\third-party\VERSIONS.json'))) { throw 'Windows install omitted third-party directory' }
     }
     finally {
         & subst.exe $substDrive /D 2>$null

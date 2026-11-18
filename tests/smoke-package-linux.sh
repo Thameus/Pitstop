@@ -29,17 +29,36 @@ export RUNNER_ABRIR_NAVEGADOR=false
 "$ROOT/app/pit" status
 [ -f "$ROOT/config/perfis.json" ] || { echo "config/perfis.json was not created"; exit 1; }
 
-# Atualização Linux: o .run deve trocar o programa sem tocar nos dados locais.
-UPDATE_ROOT="$TMP/update-install"
-mkdir -p "$UPDATE_ROOT/app" "$UPDATE_ROOT/config" "$TMP/home" "$TMP/xdg"
-printf '%s\n' old > "$UPDATE_ROOT/app/old.txt"
-printf '%s\n' 'JDK_HOME=/tmp/jdk-test' > "$UPDATE_ROOT/.env"
-printf '%s\n' '{"perfis":{"preservar":{"tipo":"comando","comando":"echo ok"}}}' > "$UPDATE_ROOT/config/perfis.json"
-HOME="$TMP/home" XDG_DATA_HOME="$TMP/xdg" sh "$RUN" --update "$UPDATE_ROOT"
-[ -x "$UPDATE_ROOT/app/Pitstop" ] || { echo "Linux update did not install Pitstop"; exit 1; }
-[ ! -f "$UPDATE_ROOT/app/old.txt" ] || { echo "Linux update left old app file"; exit 1; }
-grep -q '^JDK_HOME=/tmp/jdk-test$' "$UPDATE_ROOT/.env" || { echo "Linux update changed .env"; exit 1; }
-grep -q '"preservar"' "$UPDATE_ROOT/config/perfis.json" || { echo "Linux update changed perfis.json"; exit 1; }
+# Atualização Linux: destino pai vira <pai>/pitstop; pitstop/Pitstop e instalação existente (app/Pitstop) são usados como estão.
+mkdir -p "$TMP/home" "$TMP/xdg"
+for MODE in parent lower upper existing; do
+  if [ "$MODE" = parent ]; then
+    ARG_ROOT="$TMP/update-parent"
+    UPDATE_ROOT="$ARG_ROOT/pitstop"
+  elif [ "$MODE" = lower ]; then
+    ARG_ROOT="$TMP/update-lower/pitstop"
+    UPDATE_ROOT="$ARG_ROOT"
+  elif [ "$MODE" = upper ]; then
+    ARG_ROOT="$TMP/update-upper/Pitstop"
+    UPDATE_ROOT="$ARG_ROOT"
+  else
+    ARG_ROOT="$TMP/update-existing/MeuPitstopApp"
+    UPDATE_ROOT="$ARG_ROOT"
+  fi
+  mkdir -p "$UPDATE_ROOT/app" "$UPDATE_ROOT/config"
+  printf '%s\n' old > "$UPDATE_ROOT/app/old.txt"
+  if [ "$MODE" = existing ]; then : > "$UPDATE_ROOT/app/Pitstop"; fi
+  printf '%s\n' 'JDK_HOME=/tmp/jdk-test' > "$UPDATE_ROOT/.env"
+  printf '%s\n' '{"perfis":{"preservar":{"tipo":"comando","comando":"echo ok"}}}' > "$UPDATE_ROOT/config/perfis.json"
+  HOME="$TMP/home" XDG_DATA_HOME="$TMP/xdg" sh "$RUN" --update "$ARG_ROOT"
+  [ -x "$UPDATE_ROOT/app/Pitstop" ] || { echo "Linux update did not install Pitstop ($MODE)"; exit 1; }
+  [ ! -f "$UPDATE_ROOT/app/old.txt" ] || { echo "Linux update left old app file ($MODE)"; exit 1; }
+  [ ! -d "$UPDATE_ROOT/pitstop" ] && [ ! -d "$UPDATE_ROOT/Pitstop" ] || { echo "Linux update duplicated Pitstop root ($MODE)"; exit 1; }
+  grep -q '^JDK_HOME=/tmp/jdk-test$' "$UPDATE_ROOT/.env" || { echo "Linux update changed .env ($MODE)"; exit 1; }
+  grep -q '"preservar"' "$UPDATE_ROOT/config/perfis.json" || { echo "Linux update changed perfis.json ($MODE)"; exit 1; }
+  [ -f "$UPDATE_ROOT/THIRD-PARTY-NOTICES.md" ] || { echo "Linux install omitted root third-party notices ($MODE)"; exit 1; }
+  [ -f "$UPDATE_ROOT/third-party/VERSIONS.json" ] || { echo "Linux install omitted third-party directory ($MODE)"; exit 1; }
+done
 
 PORT=19999
 "$ROOT/app/pit" ui "$PORT" >"$TMP/ui.log" 2>&1 &

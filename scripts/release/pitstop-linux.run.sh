@@ -18,6 +18,24 @@ ask() {
   [ -z "$ans" ] && ans="$def"
   case "$ans" in s|S|sim|y|Y|yes) return 0 ;; *) return 1 ;; esac
 }
+normalize_destination() {
+  destination=${1%/}
+  [ -n "$destination" ] || destination=/
+  # Instalação existente: usa como está. Senão acrescenta "pitstop" (aceita pitstop/Pitstop como último trecho).
+  if [ ! -f "$destination/app/Pitstop" ]; then
+    case "$(basename "$destination")" in
+      pitstop|Pitstop) ;;
+      *) if [ "$destination" = / ]; then destination=/pitstop; else destination="$destination/pitstop"; fi ;;
+    esac
+  fi
+  parent=$(dirname "$destination")
+  leaf=$(basename "$destination")
+  if absolute_parent=$(cd "$parent" 2>/dev/null && pwd); then
+    printf '%s/%s\n' "${absolute_parent%/}" "$leaf"
+  else
+    printf '%s\n' "$destination"
+  fi
+}
 download() {
   url="$1"; out="$2"
   echo "  Baixando $url"
@@ -93,7 +111,7 @@ fi
 
 if [ "${1:-}" = "--update" ]; then
   [ -n "${2:-}" ] || { echo "uso: $SELF --update <destino>" >&2; exit 2; }
-  DEST="$2"
+  DEST=$(normalize_destination "$2")
   echo "  Atualizando o Pitstop em $DEST ..."
   sh "$PKG/instalar.sh" "$DEST" --sim --nao-abrir
   echo "  Pitstop $VERSION atualizado."
@@ -104,6 +122,7 @@ printf '\n  Pitstop %s - instalação Linux\n\n' "$VERSION"
 printf '  Pasta de instalação [%s]: ' "$DEST"
 read -r answer || answer=''
 [ -n "$answer" ] && DEST="$answer"
+DEST=$(normalize_destination "$DEST")
 
 echo "  Instalando o Pitstop..."
 sh "$PKG/instalar.sh" "$DEST" --sim --nao-abrir
