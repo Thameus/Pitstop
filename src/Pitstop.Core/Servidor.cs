@@ -12,7 +12,8 @@ namespace Pitstop;
 /// <summary>
 /// Tela (web\ui.html) + API HTTP. Escuta só em 127.0.0.1.
 /// Proteções: Host precisa ser localhost/127.0.0.1:&lt;porta&gt; (DNS rebinding); método que não é GET exige
-/// o cabeçalho X-PIT: 1 (POST vindo de outra página); corpo limitado a 1 MB.
+/// o cabeçalho X-PIT: 1 (POST vindo de outra página), assim como todo GET que recebe caminho local
+/// (/api/pastas, /api/inspecionar, /api/projetos, /api/mains, /api/scripts); corpo limitado a 1 MB.
 /// </summary>
 public sealed class Servidor(Runner runner, int porta)
 {
@@ -123,6 +124,7 @@ public sealed class Servidor(Runner runner, int porta)
             // ?dir= pasta de projetos do perfil (vazio = PROJETOS_DIR do .env)
             if (get && url == "/api/projetos")
             {
+                if (req.Headers["X-PIT"].ToString() != "1") { res.StatusCode = 403; return; }
                 // Repositorios adicionais: apenas os caminhos ja salvos no perfil local.
                 // A API nao aceita uma lista arbitraria de caminhos na query HTTP.
                 var perfilNome = req.Query["perfil"].ToString();
@@ -138,6 +140,7 @@ public sealed class Servidor(Runner runner, int porta)
             // seletor de classe da tela: classes com main nos fontes do módulo (?modulo=<pasta com pom.xml>)
             if (get && url == "/api/mains")
             {
+                if (req.Headers["X-PIT"].ToString() != "1") { res.StatusCode = 403; return; }
                 var mod = req.Query["modulo"].ToString();
                 if (mod == "" || !File.Exists(Path.Combine(mod, "pom.xml"))) { await Responder(res, 400, new { erro = "módulo sem pom.xml: " + mod }); return; }
                 await Responder(res, 200, JavaApp.ClassesMain(mod));

@@ -230,6 +230,18 @@ try {
     # Navegador de pastas: exige o cabeçalho X-PIT.
     $pastasNoHeader = $http.GetAsync("$base/api/pastas").GetAwaiter().GetResult()
     if ([int]$pastasNoHeader.StatusCode -ne 403) { throw 'GET /api/pastas without X-PIT should return 403' }
+    foreach ($rota in '/api/projetos', '/api/mains') {
+        $semHeader = $http.GetAsync("$base$rota").GetAwaiter().GetResult()
+        if ([int]$semHeader.StatusCode -ne 403) { throw "GET $rota without X-PIT returned $([int]$semHeader.StatusCode), expected 403" }
+    }
+    # GET de rota que recebe caminho local: sempre com X-PIT.
+    function Get-Pit([string]$url) {
+        $r = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $url)
+        $r.Headers.Add('X-PIT', '1')
+        $resp = $http.SendAsync($r).GetAwaiter().GetResult()
+        if (-not $resp.IsSuccessStatusCode) { throw "GET $url returned $([int]$resp.StatusCode)" }
+        $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    }
 
     # Diretórios: lista subpastas do diretório de teste, sem listar arquivos.
     $subDir = Join-Path $work 'sample-folder'
@@ -252,9 +264,9 @@ try {
     $mavenDir = Join-Path $work 'maven-sample'
     New-Item -ItemType Directory -Force $mavenDir | Out-Null
     Set-Content -Path (Join-Path $mavenDir 'pom.xml') -Encoding UTF8 -Value '<project><modelVersion>4.0.0</modelVersion><groupId>test</groupId><artifactId>maven-sample</artifactId><version>1</version><packaging>war</packaging></project>'
-    $direct = $http.GetStringAsync("$base/api/projetos?dir=$([Uri]::EscapeDataString($mavenDir))").GetAwaiter().GetResult() | ConvertFrom-Json
+    $direct = Get-Pit "$base/api/projetos?dir=$([Uri]::EscapeDataString($mavenDir))" | ConvertFrom-Json
     if (@($direct).Count -ne 1 -or @(@($direct)[0].artefatos).Count -ne 1) { throw 'direct Maven directory not discovered' }
-    $parent = $http.GetStringAsync("$base/api/projetos?dir=$([Uri]::EscapeDataString($work))").GetAwaiter().GetResult() | ConvertFrom-Json
+    $parent = Get-Pit "$base/api/projetos?dir=$([Uri]::EscapeDataString($work))" | ConvertFrom-Json
     if (@($parent | Where-Object nome -eq 'maven-sample').Count -ne 1) { throw 'Maven parent directory not discovered' }
 
     # Issues #22 e #23: dois repos em pastas distintas e repo offline sem perder a seleção.
@@ -269,13 +281,13 @@ try {
     })
     $configMulti | ConvertTo-Json -Depth 12 | Set-Content $cfgPath -Encoding UTF8
     $urlMulti = "$base/api/projetos?dir=$([Uri]::EscapeDataString($mavenDir))&perfil=multi"
-    $multi = $http.GetStringAsync($urlMulti).GetAwaiter().GetResult() | ConvertFrom-Json
+    $multi = Get-Pit $urlMulti | ConvertFrom-Json
     if (@($multi).Count -ne 3) { throw 'independent repositories were not merged/deduplicated' }
     if (@($multi | Where-Object { $_.repo -eq $other -and @($_.artefatos).Count -eq 1 }).Count -ne 1) { throw 'second independent Maven project missing' }
     if (@($multi | Where-Object { $_.repo -eq $offline -and $_.erro }).Count -ne 1) { throw 'offline selected repository not preserved' }
     $naoAutorizado = Join-Path $tmp 'pasta-nao-cadastrada'
     $urlInjetada = "$urlMulti&repos=$([Uri]::EscapeDataString($naoAutorizado))"
-    $resultadoInjetado = $http.GetStringAsync($urlInjetada).GetAwaiter().GetResult() | ConvertFrom-Json
+    $resultadoInjetado = Get-Pit $urlInjetada | ConvertFrom-Json
     if (@($resultadoInjetado).Count -ne 3) { throw 'untrusted repo query must be ignored' }
 
 
