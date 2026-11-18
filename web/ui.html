@@ -879,7 +879,7 @@ function pintarPerfis() {
       : t === 'zip' ? 'pacote · ' + (versaoDe(p.pacote) || 'Java')
       : t === 'comando' ? 'comando' + (p.porta ? ' · :' + p.porta : '')
       : (t === 'war' ? 'war' : 'Tomcat') + ' · :' + (p.porta || 8080);
-     b.innerHTML = `<i class="dot k-${est.k}"></i><span class="txt"><span class="nm">${esc(n)}</span><span class="mt">${esc(meta)}</span></span><span class="est">${esc(est.txt)} · ${esc(memoriaTexto(statusTodos.find(s => s.nome === n)))}</span>`;
+     b.innerHTML = `<i class="dot k-${est.k}"></i><span class="txt"><span class="nm">${esc(n)}</span><span class="mt">${esc(meta)}</span></span><span class="est">${esc(est.txt + comRam(memoriaTexto(statusTodos.find(s => s.nome === n))))}</span>`;
     b.onclick = () => selecionar(n);
     nav.appendChild(b);
   });
@@ -893,6 +893,14 @@ async function selecionar(n) {
   sujo = false; pintarSujo();
   pintarPerfis(); preencher(); conectarLog(); atualizarStatus();
 }
+function memoriaTexto(st) {
+  const e = st && st.execucao;
+  if (!e) return '';
+  const b = e.memoriaBytes;
+  if (typeof b !== 'number') return 'RAM: indisponível';
+  return 'RAM: ' + (b < 1048576 ? b + ' B' : (b / 1048576).toFixed(1) + ' MB');
+}
+function comRam(t) { return t ? ' · ' + t : ''; }
 function pintarCabecalho() {
   if (!atual || !cfg.perfis[atual]) return;
   const p = cfg.perfis[atual];
@@ -900,7 +908,7 @@ function pintarCabecalho() {
   const est = estadoDe(st);
   const tipo = tipoDe(p), java = tipo === 'java';
   $('#pillDot').className = 'dot k-' + est.k;
-  $('#pillTxt').textContent = est.pill + ' · ' + memoriaTexto(st);
+  $('#pillTxt').textContent = est.pill + comRam(memoriaTexto(st));
   $('#alvo').textContent = java ? (p.mainClass || 'sem classe main')
     : tipo === 'zip' ? (p.pacote ? base(p.pacote) + (versaoDe(p.pacote) ? ' · ' + versaoDe(p.pacote) : '') : 'sem pacote')
     : tipo === 'npm' ? 'npm run ' + (p.script || 'start') + (p.pasta ? ' · ' + base(p.pasta) : '')

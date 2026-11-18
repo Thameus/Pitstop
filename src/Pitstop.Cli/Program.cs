@@ -96,7 +96,7 @@ static class Cli
                         "npm" => "  [npm] " + s.Script + "  :" + s.Porta + "  " + s.Url,
                         "comando" => "  [comando] " + (s.Comando ?? "") + (s.Porta is int pc ? "  :" + pc : ""),
                          _ => "  :" + s.Porta + "  " + s.Url,
-                      } + "  " + MemoriaTexto(s.Execucao) + (motivo != null ? "  motivo: " + motivo : ""));
+                      } + (MemoriaTexto(s.Execucao) is { Length: > 0 } ram ? "  " + ram : "") + (motivo != null ? "  motivo: " + motivo : ""));
                 foreach (var a in s.Artefatos)
                     Console.WriteLine("          " + a.Contexto + " -> " + (a.DocBase ?? "(sem pasta explodida)"));
             }
@@ -151,7 +151,7 @@ static class Cli
         }
     }
 
-    static string MemoriaTexto(StatusExecucao? exec) => exec?.MemoriaBytes is long bytes
+    static string MemoriaTexto(StatusExecucao? exec) => exec == null ? "" : exec.MemoriaBytes is long bytes
         ? "RAM: " + (bytes < 1024 * 1024 ? bytes + " B" : (bytes / 1024d / 1024d).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MB")
         : "RAM: indisponível";
 

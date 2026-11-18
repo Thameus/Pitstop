@@ -426,9 +426,11 @@ sealed partial class Janela : Window
 
     static string Dur(long ms) => Agora.Duracao(ms);
 
-    static string MemoriaTexto(StatusExecucao? exec) => exec?.MemoriaBytes is long bytes
+    static string MemoriaTexto(StatusExecucao? exec) => exec == null ? "" : exec.MemoriaBytes is long bytes
         ? "RAM: " + (bytes < 1024 * 1024 ? bytes + " B" : (bytes / 1024d / 1024d).ToString("0.0") + " MB")
         : "RAM: indisponível";
+
+    static string ComRam(string ram) => ram.Length == 0 ? "" : " · " + ram;
 
     static Estado EstadoDe(StatusPerfil? st)
     {
