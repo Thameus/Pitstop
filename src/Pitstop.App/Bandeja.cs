@@ -120,17 +120,19 @@ sealed class Bandeja
     {
         if (p.Execucao is { } e)
         {
+            if (e.Falha) return "erro";
             if (e.Tipo == "externo") return e.Pronto == null ? "ocupado" : "externo";
             if (e.Tipo == "build" || e.Pronto == null) return "ocupado";
             return e.Tipo == "debug" ? "debug" : "noar";
         }
-        return p.EmUso ? (p.Tipo is "java" or "comando" ? "externo" : "portaocupada") : "parado";
+        return p.Ultimo?.Falha == true ? "erro" : p.EmUso ? (p.Tipo is "java" or "comando" ? "externo" : "portaocupada") : "parado";
     }
 
     static string TextoEstado(StatusPerfil p)
     {
         if (p.Execucao is { } e)
         {
+            if (e.Falha) return "falha: " + e.LinhaFalha;
             if (e.Tipo == "externo") return e.Pronto == null ? "iniciando externamente" : "no ar (iniciado externamente)";
             if (e.Tipo == "build") return "build " + Agora.Duracao(Agora.Ms - e.Desde);
             if (e.Tipo == "reinicio") return "reiniciando";
@@ -138,7 +140,7 @@ sealed class Bandeja
             return e.Tipo == "debug" ? "debug :" + p.PortaDebug : "no ar";
         }
         if (p.EmUso) return p.Tipo is "java" or "comando" ? "executando externamente" : "porta " + p.Porta + " ocupada";
-        return "parado";
+        return p.Ultimo?.Falha == true ? "falha: " + p.Ultimo.LinhaFalha : "parado";
     }
 
     async void Poll()

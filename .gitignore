@@ -28,3 +28,6 @@ Pitstop.lnk
 .DS_Store
 Thumbs.db
 *.log
+
+# estado de continuidade local (por chat/projeto)
+_loop/

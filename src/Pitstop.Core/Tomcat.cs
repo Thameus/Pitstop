@@ -12,6 +12,25 @@ public sealed record Publicado(string Contexto, string DocBase, string Modo = "c
 /// </summary>
 public static class Tomcat
 {
+    static readonly HttpClient ClientePronto = new(new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseProxy = false,
+    }) { Timeout = TimeSpan.FromSeconds(2) };
+
+    /// <summary>Lê o arquivo catalina mais recente da base do perfil, sem acessar caminhos configuráveis pelo usuário.</summary>
+    public static IEnumerable<string> LerUltimoLog(Perfil p, int maxLinhas = 1500)
+    {
+        var dir = Path.Combine(p.Base, "logs");
+        if (!Directory.Exists(dir)) return [];
+        var arq = Directory.GetFiles(dir, "catalina*.log")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+        if (arq == null) return [];
+        try { return File.ReadLines(arq).TakeLast(maxLinhas).ToArray(); }
+        catch { return []; }
+    }
+
     /// <summary>Pasta explodida mais recente em &lt;repo&gt;\&lt;modulo&gt;\target que tenha WEB-INF.</summary>
     public static string? ResolverDocBase(Artefato a)
     {
@@ -42,6 +61,37 @@ public static class Tomcat
             url.Port != p.Porta || url.UserInfo != "")
             throw new ErroRunner("URL de prontidão deve ser HTTP no localhost e na porta " + p.Porta);
         return url;
+    }
+
+    /// <summary>
+    /// Aguarda a URL de prontidão de um Tomcat iniciado pelo terminal. Não há timeout geral: a espera termina
+    /// somente quando a aplicação responde, o processo sai ou o chamador cancela (por exemplo, Ctrl+C).
+    /// </summary>
+    public static async Task<long?> AguardarPronto(Process processo, Uri url, CancellationToken cancelamento)
+    {
+        using var cancelar = CancellationTokenSource.CreateLinkedTokenSource(cancelamento);
+        void ProcessoSaiu(object? _, EventArgs __) => cancelar.Cancel();
+        processo.EnableRaisingEvents = true;
+        processo.Exited += ProcessoSaiu;
+        var inicio = Agora.Ms;
+        try
+        {
+            while (!cancelar.IsCancellationRequested && !processo.HasExited)
+            {
+                try
+                {
+                    using var resposta = await ClientePronto.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancelar.Token).ConfigureAwait(false);
+                    if ((int)resposta.StatusCode is >= 200 and < 400)
+                        return Agora.Ms - inicio;
+                }
+                catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+
+                try { await Task.Delay(500, cancelar.Token).ConfigureAwait(false); }
+                catch (TaskCanceledException) { }
+            }
+            return null;
+        }
+        finally { processo.Exited -= ProcessoSaiu; }
     }
 
     static string NomeArquivoContexto(string ctx)

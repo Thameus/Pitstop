@@ -46,7 +46,7 @@ Ou:
 sh pitstop-*-linux-x64.run
 ```
 
-O destino padrão é `~/.local/share/pitstop`.
+O destino padrão é `~/.local/share/pitstop` (minúsculo). Se a pasta escolhida não terminar em `pitstop`/`Pitstop` e não já contiver uma instalação (`app/Pitstop`), o instalador cria a subpasta `pitstop` dentro dela.
 
 Os pacotes `.tar.xz` também ficam disponíveis para uso portátil.
 

@@ -322,3 +322,11 @@ Para testar em um ambiente fictício e isolado, execute `powershell -File tests/
 - Testes: integração multi-repositório, smoke de API/UI e testes do pacote com falha de atualização deliberadamente injetada.
 
 Para detalhes da atualização e limitações de arquivos bloqueados, consulte `docs/ATUALIZADOR-V3.0.8.md`.
+
+## Versão 3.0.9
+
+- **Issues #35, #36, #39-#42:** `pit up` avisa quando o perfil fica pronto; `falhaLog` marca a falha pelo log; memória (RAM) por perfil em execução; auto-parada por duração; remoção segura de perfil; `pit down --todos`.
+- **MCP:** a primeira mensagem recebida por pipe (o `initialize` dos clientes) não é mais descartada.
+- **API local:** `/api/projetos` e `/api/mains` exigem o cabeçalho `X-PIT`, como as demais rotas que recebem caminho.
+- **Instalação:** Linux mantém `~/.local/share/pitstop`; reinstalar sobre uma instalação existente atualiza no lugar, sem criar subpasta.
+- Testes: seis tipos de perfil, auto-parada com falha, medição de memória com processos que somem e UI com perfil cadastrado.

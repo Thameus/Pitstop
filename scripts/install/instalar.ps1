@@ -39,6 +39,9 @@ if (-not $Silencioso) {
     if (-not [string]::IsNullOrWhiteSpace($r)) { $Destino = $r.Trim('"') }
 }
 $Destino = [IO.Path]::GetFullPath($Destino)
+$nomeFinal = [IO.Path]::GetFileName($Destino.TrimEnd('\', '/'))
+if (-not (Test-Path -LiteralPath (Join-Path $Destino 'app\Pitstop.exe')) -and $nomeFinal -ne 'Pitstop') { $Destino = Join-Path $Destino 'Pitstop' }
+$Destino = [IO.Path]::GetFullPath($Destino)
 
 # Pitstop aberto a partir do destino: o Windows trava o .exe em uso
 $aberto = Get-Process -Name 'Pitstop' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($Destino, [StringComparison]::OrdinalIgnoreCase) }
@@ -57,11 +60,13 @@ if ($origem.TrimEnd('\') -ne $Destino.TrimEnd('\')) {
     } else {
         New-Item -ItemType Directory -Force $Destino | Out-Null
     }
-    # app\ e web\ são do programa: troca inteiro (versão nova não deixa arquivo velho para trás)
-    foreach ($d in @('app', 'web')) {
+    # app\, web\ e third-party\ são do programa: troca inteiro (versão nova não deixa arquivo velho para trás)
+    foreach ($d in @('app', 'web', 'third-party')) {
+        $fonteDir = Join-Path $origem $d
+        if (-not (Test-Path -LiteralPath $fonteDir)) { continue }
         $alvo = Join-Path $Destino $d
         if (Test-Path $alvo) { Remove-Item -Recurse -Force $alvo }
-        Copy-Item -Recurse (Join-Path $origem $d) $alvo
+        Copy-Item -Recurse $fonteDir $alvo
     }
     if (Test-Path (Join-Path $origem 'docs')) {
         $docsDestino = Join-Path $Destino 'docs'

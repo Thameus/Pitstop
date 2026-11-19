@@ -50,8 +50,26 @@ try {
         (Rpc 7 'tools/call' @{ name = 'pitstop_delete_profile'; arguments = @{ perfil = 'mcp-teste' } }),
         (Rpc 8 'tools/call' @{ name = 'pitstop_profiles'; arguments = @{} })
     )
-    $out = @($reqs | & dotnet $dll mcp)
-    if ($LASTEXITCODE -ne 0) { throw "MCP exited $LASTEXITCODE" }
+    # Stdin explicito em UTF-8 sem BOM: o pipe nativo do PS 5.1 prefixa BOM na 1a linha e derruba o initialize.
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = 'dotnet'
+    $psi.Arguments = '"' + $dll + '" mcp'
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = New-Object Text.UTF8Encoding $false
+    $mcp = [Diagnostics.Process]::Start($psi)
+    $errTask = $mcp.StandardError.ReadToEndAsync()
+    $stdin = New-Object IO.StreamWriter($mcp.StandardInput.BaseStream, (New-Object Text.UTF8Encoding $false))
+    $stdin.NewLine = "`n"
+    foreach ($q in $reqs) { $stdin.WriteLine($q) }
+    $stdin.Flush(); $stdin.Close()
+    $stdoutText = $mcp.StandardOutput.ReadToEnd()
+    if (-not $mcp.WaitForExit(60000)) { $mcp.Kill(); throw 'MCP nao encerrou' }
+    if ($mcp.ExitCode -ne 0) { throw "MCP exited $($mcp.ExitCode): $($errTask.Result)" }
+    $out = @($stdoutText -split "`r?`n" | Where-Object { $_.Trim() })
     if ($out.Count -ne $reqs.Count) { throw "Expected $($reqs.Count) messages, got $($out.Count): $out" }
     $r = @($out | ForEach-Object { $_ | ConvertFrom-Json })
     if ($r[0].result.serverInfo.name -ne 'pitstop') { throw 'initialize failed' }
