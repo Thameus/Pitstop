@@ -103,6 +103,12 @@ static class Cli
             return 0;
         }
         if (cmd is null or "-h" or "--help" or "/?") { Ajuda(); return cmd is null ? 1 : 0; }
+        if (cmd is "--version" or "-v" or "version")
+        {
+            var v = typeof(Cli).Assembly.GetName().Version;
+            Console.WriteLine(v != null ? $"{v.Major}.{v.Minor}.{v.Build}" : "3.0.9");
+            return 0;
+        }
         // A flag precisa ser tratada antes de interpretar o segundo argumento como nome de perfil:
         // `pit down --todos` percorre a configuração, não procura um perfil chamado --todos.
         if ((cmd is "down" or "stop") && Flag("--todos"))

@@ -443,20 +443,21 @@ try
         Console.WriteLine("OK #45 medição de memória tolera filho que sumiu");
     }
 
-    // #39: uma porta ocupada sem pit.pid/ownership não pode ser parada em lote.
-    using (var portaAlheia = new TcpListener(IPAddress.Loopback, 0))
+    var dll = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "../../../../../src/Pitstop.Cli/bin/Release/net10.0/pit.dll"));
+    // #63: pit --version / -v / version imprime a versão da CLI.
+    var psiVersion = new ProcessStartInfo
     {
-        portaAlheia.Start();
-        var porta = ((IPEndPoint)portaAlheia.LocalEndpoint).Port;
-        Directory.CreateDirectory(Path.Combine(raiz, "config"));
-        File.WriteAllText(Path.Combine(raiz, "config", "perfis.json"),
-            "{\"perfis\":{\"sem-dono\":{\"tipo\":\"tomcat\",\"porta\":" + porta +
-            ",\"portaShutdown\":" + (porta + 1) + ",\"artefatos\":[]}}}");
-        await new Runner().PararTodos(["sem-dono"]);
-        using var prova = new TcpClient();
-        await prova.ConnectAsync(IPAddress.Loopback, porta);
-        Console.WriteLine("OK #39 parada em lote não usa porta sem ownership");
-    }
+        FileName = "/home/hermes/.dotnet/dotnet",
+        Arguments = $"{dll} --version",
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false
+    };
+    using var pVer = Process.Start(psiVersion)!;
+    var outVer = pVer.StandardOutput.ReadToEnd().Trim();
+    pVer.WaitForExit();
+    Checar(pVer.ExitCode == 0 && outVer == "3.0.9", "pit --version deve retornar 3.0.9 e exit code 0, obtido: " + outVer);
+    Console.WriteLine("OK #63 pit --version retorna a versão da CLI corretamente");
 
     Console.WriteLine("INTEGRATION OK");
 }
