@@ -27,7 +27,7 @@ try {
     & dotnet $dll status | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "pit status failed with exit code $LASTEXITCODE" }
 
-    $versionOut = (& /home/hermes/.dotnet/dotnet $dll --version 2>&1 | Out-String).Trim()
+    $versionOut = (& dotnet $dll --version 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $versionOut -notmatch '^\d+\.\d+\.\d+$') {
         throw "pit --version smoke failed: exit=$LASTEXITCODE output=$versionOut"
     }
