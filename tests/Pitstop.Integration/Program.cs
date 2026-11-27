@@ -443,7 +443,18 @@ try
         Console.WriteLine("OK #45 medição de memória tolera filho que sumiu");
     }
 
-    // #39: uma porta ocupada sem pit.pid/ownership não pode ser parada em lote.
+    // #32: pit logs funciona para perfil Tomcat e Comando.
+    var baseTomcatLogs = Path.Combine(raiz, "base-logs");
+    var logsTomcatDir = Path.Combine(baseTomcatLogs, "logs");
+    Directory.CreateDirectory(logsTomcatDir);
+    File.WriteAllText(Path.Combine(logsTomcatDir, "catalina.2026-01-01.log"), "linha de log catalina tomcat");
+    var perfilTomcatLog = new Perfil
+    {
+        Nome = "TomcatLog", Tipo = "tomcat", Base = baseTomcatLogs
+    };
+    var linhasTomcatLog = Tomcat.LerUltimoLog(perfilTomcatLog, 10).ToArray();
+    Checar(linhasTomcatLog.Length == 1 && linhasTomcatLog[0] == "linha de log catalina tomcat", "pit logs deve ler log do Tomcat corretamente");
+    Console.WriteLine("OK #32 pit logs para perfil Tomcat");
     using (var portaAlheia = new TcpListener(IPAddress.Loopback, 0))
     {
         portaAlheia.Start();
